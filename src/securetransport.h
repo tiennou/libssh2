@@ -81,7 +81,3 @@ typedef struct _libssh2_bn_ctx {
 #define _libssh2_bn_bytes(bn) 0
 #define _libssh2_bn_bits(bn) 0
 #define _libssh2_bn_free(bn)
-
-const void *_libssh2_EVP_aes_128_ctr(void);
-const void *_libssh2_EVP_aes_192_ctr(void);
-const void *_libssh2_EVP_aes_256_ctr(void);
