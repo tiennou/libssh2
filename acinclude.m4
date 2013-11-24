@@ -466,6 +466,28 @@ m4_case([$1],
     support_clear_memory="$ac_cv_have_decl_SecureZeroMemory"
   ])
 ],
+
+[securetransport], [
+  # Look for Security.framework
+
+  save_LIBS="$LIBS"
+  LIBS="$LIBS -framework Security"
+  AC_LINK_IFELSE(
+    [AC_LANG_PROGRAM([],[])],
+    [cv_framework_securetransport=yes],
+    [cv_framework_securetransport=no])
+  LIBS="$save_libs"
+
+  if test "$cv_framework_securetransport" = "yes"; then
+    AC_DEFINE([LIBSSH2_SECURETRANSPORT], 1, [Use $1])
+    LIBS="$LIBS -framework Security"
+    found_crypto=securetransport
+    found_crypto_str="SecureTransport"
+
+    AC_CHECK_FUNCS(SecRandomCopyBytes)
+  fi
+  AM_CONDITIONAL(SECURETRANSPORT, test "$cv_framework_securetransport" = "yes")
+],
 )
   test "$found_crypto" = "none" &&
     crypto_errors="${crypto_errors}No $1 crypto library found!
