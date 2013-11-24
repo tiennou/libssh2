@@ -1,6 +1,8 @@
 /* Copyright (C) 2013 Keith Duncan */
 
-#define _libssh2_random(buf, len)
+#import <Security/Security.h>
+
+#define _libssh2_random(buf, len) SecRandomCopyBytes(kSecRandomDefault, len, buf)
 
 #define libssh2_sha1_ctx
 #define libssh2_sha1_init(ctx)
