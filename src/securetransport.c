@@ -1,5 +1,9 @@
 /* Copyright (C) 2013 Keith Duncan */
 
+#import "securetransport.h"
+
+#include "libssh2_priv.h"
+
 void _libssh2_init_aes_ctr(void) {
 
 }
