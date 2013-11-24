@@ -13,6 +13,7 @@
 #define libssh2_sha1_final(ctx, out) CC_SHA1_Final(out, &ctx)
 #define libssh2_sha1(data, datalen, out) CC_SHA1(data, datalen, out)
 
+#define LIBSSH2_MD5 1
 #define MD5_DIGEST_LENGTH CC_MD5_DIGEST_LENGTH
 
 #define libssh2_md5_ctx CC_MD5_CTX
@@ -20,6 +21,8 @@
 #define libssh2_md5_update(ctx, data, len) CC_MD5_Update(&ctx, data, len)
 #define libssh2_md5_final(ctx, out) CC_MD5_Final(out, &ctx)
 #define libssh2_md5(data, datalen, out) CC_MD5(data, datalen, out)
+
+#define LIBSSH2_HMAC_RIPEMD 0
 
 #define libssh2_hmac_ctx CCHmacContext
 #define libssh2_hmac_sha1_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgSHA1, key, keylen)
