@@ -5,11 +5,15 @@
 
 #define _libssh2_random(buf, len) SecRandomCopyBytes(kSecRandomDefault, len, buf)
 
+#define SHA_DIGEST_LENGTH CC_SHA1_DIGEST_LENGTH
+
 #define libssh2_sha1_ctx CC_SHA1_CTX
 #define libssh2_sha1_init(ctx) CC_SHA1_Init(ctx)
 #define libssh2_sha1_update(ctx, data, len) CC_SHA1_Update(ctx, data, len)
 #define libssh2_sha1_final(ctx, out) CC_SHA1_Final(out, ctx)
 #define libssh2_sha1(data, datalen, out) CC_SHA1(data, datalen, out)
+
+#define MD5_DIGEST_LENGTH CC_MD5_DIGEST_LENGTH
 
 #define libssh2_md5_ctx CC_MD5_CTX
 #define libssh2_md5_init(ctx) CC_MD5_Init(ctx)
