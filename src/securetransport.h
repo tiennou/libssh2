@@ -35,18 +35,31 @@
 #define libssh2_crypto_init() NULL
 #define libssh2_crypto_exit() NULL
 
-typedef struct libssh2_rsa_ctx {
+#define LIBSSH2_RSA 1
+#define LIBSSH2_DSA 1
+
+typedef struct {
 
 } libssh2_rsa_ctx;
 
 #define _libssh2_rsa_free(rsactx)
 
-#define libssh2_dsa_ctx
+typedef struct {
+
+} libssh2_dsa_ctx;
+
 #define _libssh2_dsa_free(dsactx)
 
-typedef struct _libssh2_cipher_ctx {
+typedef struct {
 
 } _libssh2_cipher_ctx;
+
+#define LIBSSH2_AES 1
+#define LIBSSH2_AES_CTR 1
+#define LIBSSH2_BLOWFISH 1
+#define LIBSSH2_RC4 1
+#define LIBSSH2_CAST 1
+#define LIBSSH2_3DES 1
 
 #define _libssh2_cipher_type(name) void *name
 
@@ -65,11 +78,11 @@ typedef struct _libssh2_cipher_ctx {
 
 #define _libssh2_cipher_dtor(ctx)
 
-typedef struct _libssh2_bn {
+typedef struct {
 
 } _libssh2_bn;
 
-typedef struct _libssh2_bn_ctx {
+typedef struct {
 
 } _libssh2_bn_ctx;
 
