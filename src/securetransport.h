@@ -2,6 +2,7 @@
 
 #import <Security/Security.h>
 #import <CommonCrypto/CommonCrypto.h>
+#import "CommonBigNum.h"
 
 #define _libssh2_random(buf, len) SecRandomCopyBytes(kSecRandomDefault, len, buf)
 
