@@ -9,37 +9,43 @@
 
 #define libssh2_sha1_ctx CC_SHA1_CTX
 #define libssh2_sha1_init(ctx) CC_SHA1_Init(ctx)
-#define libssh2_sha1_update(ctx, data, len) CC_SHA1_Update(ctx, data, len)
-#define libssh2_sha1_final(ctx, out) CC_SHA1_Final(out, ctx)
+#define libssh2_sha1_update(ctx, data, len) CC_SHA1_Update(&ctx, data, len)
+#define libssh2_sha1_final(ctx, out) CC_SHA1_Final(out, &ctx)
 #define libssh2_sha1(data, datalen, out) CC_SHA1(data, datalen, out)
 
 #define MD5_DIGEST_LENGTH CC_MD5_DIGEST_LENGTH
 
 #define libssh2_md5_ctx CC_MD5_CTX
 #define libssh2_md5_init(ctx) CC_MD5_Init(ctx)
-#define libssh2_md5_update(ctx, data, len) CC_MD5_Update(ctx, data, len)
-#define libssh2_md5_final(ctx, out) CC_MD5_Final(out, ctx)
+#define libssh2_md5_update(ctx, data, len) CC_MD5_Update(&ctx, data, len)
+#define libssh2_md5_final(ctx, out) CC_MD5_Final(out, &ctx)
 #define libssh2_md5(data, datalen, out) CC_MD5(data, datalen, out)
 
 #define libssh2_hmac_ctx CCHmacContext
 #define libssh2_hmac_sha1_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgSHA1, key, keylen)
 #define libssh2_hmac_md5_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgMD5, key, keylen)
 //#define libssh2_hmac_ripemd160_init(ctx, key, keylen)
-#define libssh2_hmac_update(ctx, data, datalen) CCHmacUpdate(ctx, data, datalen)
-#define libssh2_hmac_final(ctx, data) CCHmacFinal(ctx, data)
+#define libssh2_hmac_update(ctx, data, datalen) CCHmacUpdate(&ctx, data, datalen)
+#define libssh2_hmac_final(ctx, data) CCHmacFinal(&ctx, data)
 #define libssh2_hmac_cleanup(ctx)
 
-#define libssh2_crypto_init()
-#define libssh2_crypto_exit()
+#define libssh2_crypto_init() NULL
+#define libssh2_crypto_exit() NULL
 
-#define libssh2_rsa_ctx
+typedef struct libssh2_rsa_ctx {
+
+} libssh2_rsa_ctx;
+
 #define _libssh2_rsa_free(rsactx)
 
 #define libssh2_dsa_ctx
 #define _libssh2_dsa_free(dsactx)
 
-#define _libssh2_cipher_type(name)
-#define _libssh2_cipher_ctx
+typedef struct _libssh2_cipher_ctx {
+
+} _libssh2_cipher_ctx;
+
+#define _libssh2_cipher_type(name) void *name
 
 #define _libssh2_cipher_aes256
 #define _libssh2_cipher_aes192
@@ -56,18 +62,24 @@
 
 #define _libssh2_cipher_dtor(ctx)
 
-#define _libssh2_bn
-#define _libssh2_bn_ctx
-#define _libssh2_bn_ctx_new()
+typedef struct _libssh2_bn {
+
+} _libssh2_bn;
+
+typedef struct _libssh2_bn_ctx {
+
+} _libssh2_bn_ctx;
+
+#define _libssh2_bn_ctx_new() NULL
 #define _libssh2_bn_ctx_free(bnctx)
-#define _libssh2_bn_init()
+#define _libssh2_bn_init() NULL
 #define _libssh2_bn_rand(bn, bits, top, bottom)
 #define _libssh2_bn_mod_exp(r, a, p, m, ctx)
 #define _libssh2_bn_set_word(bn, val)
 #define _libssh2_bn_from_bin(bn, len, val)
 #define _libssh2_bn_to_bin(bn, val)
-#define _libssh2_bn_bytes(bn)
-#define _libssh2_bn_bits(bn)
+#define _libssh2_bn_bytes(bn) 0
+#define _libssh2_bn_bits(bn) 0
 #define _libssh2_bn_free(bn)
 
 const void *_libssh2_EVP_aes_128_ctr(void);
