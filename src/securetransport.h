@@ -79,22 +79,29 @@ typedef struct {
 
 #define _libssh2_cipher_dtor(ctx)
 
-typedef struct {
-
-} _libssh2_bn;
-
-typedef struct {
-
-} _libssh2_bn_ctx;
-
+typedef void *_libssh2_bn_ctx;
 #define _libssh2_bn_ctx_new() NULL
 #define _libssh2_bn_ctx_free(bnctx)
-#define _libssh2_bn_init() NULL
-#define _libssh2_bn_rand(bn, bits, top, bottom)
-#define _libssh2_bn_mod_exp(r, a, p, m, ctx)
-#define _libssh2_bn_set_word(bn, val)
-#define _libssh2_bn_from_bin(bn, len, val)
-#define _libssh2_bn_to_bin(bn, val)
-#define _libssh2_bn_bytes(bn) 0
-#define _libssh2_bn_bits(bn) 0
-#define _libssh2_bn_free(bn)
+
+#define _libssh2_bn struct _CCBigNumRef
+#define _libssh2_bn_init() CCCreateBigNum(NULL)
+#define _libssh2_bn_rand(bn, bits, top, bottom) \
+do {\
+  if (bn != NULL) CCBigNumFree(bn);\
+  bn = CCBigNumCreateRandom(NULL, bits, top, bottom);\
+} while (0)
+#define _libssh2_bn_mod_exp(r, a, power, modulus, ctx) CCBigNumModExp(r, a, power, modulus)
+
+#define _libssh2_bn_set_word(bn, val) \
+do {\
+CCBigNumClear(bn);\
+CCBigNumAddI(bn, bn, val);\
+} while (0)
+
+#define _libssh2_bn_from_bin(bn, len, val) CCBigNumFromData(NULL, val, len)
+#define _libssh2_bn_to_bin(bn, val) CCBigNumToData(NULL, bn, val)
+
+#define _libssh2_bn_bytes(bn) CCBigNumByteCount(bn)
+#define _libssh2_bn_bits(bn) CCBigNumBitCount(bn)
+
+#define _libssh2_bn_free(bn) CCBigNumFree(bn)
