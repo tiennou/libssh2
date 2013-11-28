@@ -97,10 +97,6 @@ int _libssh2_cipher_crypt(_libssh2_cipher_ctx * ctx,
   return 0;
 }
 
-void _libssh2_init_aes_ctr(void) {
-
-}
-
 #pragma mark - Private Public Keys
 
 int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session, unsigned char **method, size_t *method_len, unsigned char **pubkeydata, size_t *pubkeydata_len, const char *privatekey, const char *passphrase) {
