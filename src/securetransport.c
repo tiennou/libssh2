@@ -6,6 +6,11 @@
 
 #pragma mark RSA
 
+int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
+  CFRelease(rsa);
+  return 0;
+}
+
 /*
     Create an RSA private key from the raw numeric components.
 
@@ -114,6 +119,11 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
 }
 
 #pragma mark - DSA
+
+int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
+  CFRelease(dsa);
+  return 0;
+}
 
 /*
     Create a DSA private key from the raw numeric components.
