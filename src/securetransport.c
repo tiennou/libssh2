@@ -123,14 +123,19 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
     cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
   }
 
+  CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
+
   SecExternalFormat format = kSecFormatUnknown;
   SecExternalItemType type = kSecItemTypePrivateKey;
   SecItemImportExportKeyParameters parameters = {
     .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
     .passphrase = cfPassphrase,
+    .keyAttributes = attributes,
   };
   CFArrayRef items = NULL;
   OSStatus error = SecItemImport(keyData, cfFilename, &format, &type, 0, &parameters, NULL, &items);
+
+  CFRelease(attributes);
 
   CFRelease(keyData);
   CFRelease(cfFilename);
@@ -161,6 +166,69 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
   return 0;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
+  if (keyRef->KeyHeader.AlgorithmId != CSSM_ALGID_RSA) return NULL;
+  if (keyRef->KeyHeader.Format != CSSM_KEYBLOB_RAW_FORMAT_PKCS1) return NULL;
+  if (keyRef->KeyHeader.KeyClass != CSSM_KEYCLASS_PRIVATE_KEY) return NULL;
+
+  return NULL;
+}
+
+static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef privateKey) {
+  CSSM_KEY const *keyRef;
+  OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
+  if (error != errSecSuccess) {
+    return NULL;
+  }
+
+  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_REFERENCE) {
+    CSSM_CSP_HANDLE csp;
+    error = SecKeyGetCSPHandle(privateKey, &csp);
+    if (error != errSecSuccess) {
+      return NULL;
+    }
+
+    CSSM_KEY rawKey = {};
+    CSSM_ACCESS_CREDENTIALS credentials = {};
+
+    CSSM_CC_HANDLE context;
+    CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
+    if (cssmError != CSSM_OK) {
+      return NULL;
+    }
+
+    CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
+      .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
+      .AttributeLength = sizeof(uint32),
+      .Attribute.Uint32 = CSSM_KEYBLOB_RAW_FORMAT_PKCS1,
+    };
+    cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
+    if (cssmError != CSSM_OK) {
+      CSSM_DeleteContext(context);
+      return NULL;
+    }
+
+    cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
+    if (cssmError != CSSM_OK) {
+      CSSM_DeleteContext(context);
+      return NULL;
+    }
+
+    SecKeyRef publicKey = convert_rsa_private_key(&rawKey);
+
+    CSSM_DeleteContext(context);
+
+    return publicKey;
+  }
+
+  return convert_rsa_private_key(keyRef);
+}
+
+#pragma clang diagnostic pop
+
 /*
     Verify an RSA signature with an RSA key.
     
@@ -180,6 +248,8 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
   assert(rsa != NULL);
   assert(sig != NULL);
   assert(m != NULL);
+
+  SecKeyRef publicKey = convert_rsa_private_key_to_public_key(rsa);
 
   CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
 
