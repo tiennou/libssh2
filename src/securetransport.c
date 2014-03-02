@@ -3,6 +3,7 @@
 #import "securetransport.h"
 
 #include "libssh2_priv.h"
+#include <Security/SecAsn1Coder.h>
 
 #pragma mark Utilities
 
@@ -44,12 +45,136 @@ static CFDataRef CreateDataFromFile(char const *path) {
   return (CFDataRef)keyData;
 }
 
+#pragma mark - PKCS#1
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+// <http://tools.ietf.org/html/rfc3447#appendix-A.1.2>
+
+typedef struct {
+  CSSM_DATA version; // RSA_Version_TwoPrime
+  CSSM_DATA modulus;
+  CSSM_DATA publicExponent;
+  CSSM_DATA privateExponent;
+  CSSM_DATA prime1;
+  CSSM_DATA prime2;
+  CSSM_DATA exponent1;
+  CSSM_DATA exponent2;
+  CSSM_DATA coefficient;
+} _libssh2_pkcs1_rsa_private_key;
+
+typedef enum {
+  RSA_Version_TwoPrime = 0,
+  RSA_Version_Multi = 1,
+} RSA_Version;
+
+static SecAsn1Template const _libssh2_pkcs1_rsa_private_key_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_pkcs1_rsa_private_key) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, version) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, modulus) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, publicExponent) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, privateExponent) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, prime1) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, prime2) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, exponent1) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, exponent2) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_private_key, coefficient) },
+  { },
+};
+
+#pragma clang diagnostic pop
+
 #pragma mark - RSA
 
 int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
   CFRelease(rsa);
   return 0;
 }
+
+static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, char const *filename, char const *passphrase) {
+  CFStringRef cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
+
+  CFStringRef cfPassphrase = NULL;
+  if (passphrase != NULL) {
+    cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
+  }
+
+  CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
+
+  SecExternalFormat format = kSecFormatUnknown;
+  SecExternalItemType type = kSecItemTypePrivateKey;
+  SecItemImportExportKeyParameters parameters = {
+    .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
+    .passphrase = cfPassphrase,
+    .keyAttributes = attributes,
+  };
+  CFArrayRef items = NULL;
+  OSStatus error = SecItemImport(keyData, cfFilename, &format, &type, 0, &parameters, NULL, &items);
+
+  CFRelease(attributes);
+
+  CFRelease(cfFilename);
+
+  if (cfPassphrase != NULL) {
+    CFRelease(cfPassphrase);
+  }
+
+  if (error != errSecSuccess) {
+    return 1;
+  }
+
+  if (CFArrayGetCount(items) > 1) {
+    CFRelease(items);
+    return 1;
+  }
+
+  CFTypeRef item = CFArrayGetValueAtIndex(items, 0);
+  if (CFGetTypeID(item) != SecKeyGetTypeID()) {
+    CFRelease(items);
+    return 1;
+  }
+
+  *rsa = (SecKeyRef)CFRetain(item);
+
+  CFRelease(items);
+
+  return 0;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+static int _libssh2_rsa_new_from_binary_template(libssh2_rsa_ctx **rsa,
+                                                 CSSM_KEYBLOB_FORMAT format,
+                                                 CSSM_KEYCLASS keyClass,
+                                                 void const *bytes,
+                                                 SecAsn1Template const *templates) {
+  SecAsn1CoderRef coder = NULL;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != noErr) {
+    return 1;
+  }
+
+  CSSM_DATA keyData = {};
+  error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
+  if (error != noErr) {
+    SecAsn1CoderRelease(coder);
+    return 1;
+  }
+
+  CFDataRef cfKeyData = CFDataCreate(kCFAllocatorDefault, keyData.Data, keyData.Length);
+
+  SecAsn1CoderRelease(coder);
+
+  int keyError = _libssh2_rsa_new_from_data(rsa, cfKeyData, ".pem", NULL);
+
+  CFRelease(cfKeyData);
+
+  return keyError;
+}
+
+#pragma clang diagnostic pop
 
 /*
     Create an RSA private key from the raw numeric components.
@@ -87,7 +212,47 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
   assert(e2data != NULL);
   assert(coeffdata != NULL);
 
-  return 0;
+  uint8_t version = RSA_Version_TwoPrime;
+
+  _libssh2_pkcs1_rsa_private_key keyData = {
+    .version = {
+      .Length = sizeof(version),
+      .Data = &version,
+    },
+    .modulus = {
+      .Length = nlen,
+      .Data = (uint8_t *)ndata,
+    },
+    .publicExponent = {
+      .Length = elen,
+      .Data = (uint8_t *)edata,
+    },
+    .privateExponent = {
+      .Length = dlen,
+      .Data = (uint8_t *)ddata,
+    },
+    .prime1 = {
+      .Length = plen,
+      .Data = (uint8_t *)pdata,
+    },
+    .prime2 = {
+      .Length = qlen,
+      .Data = (uint8_t *)qdata,
+    },
+    .exponent1 = {
+      .Length = e1len,
+      .Data = (uint8_t *)e1data,
+    },
+    .exponent2 = {
+      .Length = e2len,
+      .Data = (uint8_t *)e2data,
+    },
+    .coefficient = {
+      .Length = coefflen,
+      .Data = (uint8_t *)coeffdata,
+    },
+  };
+  return _libssh2_rsa_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template);
 }
 
 /*
@@ -116,54 +281,11 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
     return 1;
   }
 
-  CFStringRef cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
-
-  CFStringRef cfPassphrase = NULL;
-  if (passphrase != NULL) {
-    cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
-  }
-
-  CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
-
-  SecExternalFormat format = kSecFormatUnknown;
-  SecExternalItemType type = kSecItemTypePrivateKey;
-  SecItemImportExportKeyParameters parameters = {
-    .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
-    .passphrase = cfPassphrase,
-    .keyAttributes = attributes,
-  };
-  CFArrayRef items = NULL;
-  OSStatus error = SecItemImport(keyData, cfFilename, &format, &type, 0, &parameters, NULL, &items);
-
-  CFRelease(attributes);
+  int error = _libssh2_rsa_new_from_data(rsa, keyData, filename, (char const *)passphrase);
 
   CFRelease(keyData);
-  CFRelease(cfFilename);
 
-  if (cfPassphrase != NULL) {
-    CFRelease(cfPassphrase);
-  }
-
-  if (error != errSecSuccess) {
-    return 1;
-  }
-
-  if (CFArrayGetCount(items) > 1) {
-    CFRelease(items);
-    return 1;
-  }
-
-  CFTypeRef item = CFArrayGetValueAtIndex(items, 0);
-  if (CFGetTypeID(item) != SecKeyGetTypeID()) {
-    CFRelease(items);
-    return 1;
-  }
-
-  *rsa = (SecKeyRef)CFRetain(item);
-
-  CFRelease(items);
-
-  return 0;
+  return error;
 }
 
 #pragma clang diagnostic push
