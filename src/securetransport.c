@@ -83,6 +83,18 @@ static SecAsn1Template const _libssh2_pkcs1_rsa_private_key_template[] = {
   { },
 };
 
+typedef struct {
+  CSSM_DATA modulus;
+  CSSM_DATA publicExponent;
+} _libssh2_pkcs1_rsa_public_key;
+
+static SecAsn1Template const _libssh2_pkcs1_rsa_public_key_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_pkcs1_rsa_public_key) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_public_key, modulus) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_pkcs1_rsa_public_key, publicExponent) },
+  { },
+};
+
 #pragma clang diagnostic pop
 
 #pragma mark - RSA
@@ -92,8 +104,11 @@ int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
   return 0;
 }
 
-static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, char const *filename, char const *passphrase) {
-  CFStringRef cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
+static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
+  CFStringRef cfFilename = NULL;
+  if (filename != NULL) {
+    cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
+  }
 
   CFStringRef cfPassphrase = NULL;
   if (passphrase != NULL) {
@@ -103,18 +118,20 @@ static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, 
   CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
 
   SecExternalFormat format = kSecFormatUnknown;
-  SecExternalItemType type = kSecItemTypePrivateKey;
+  SecExternalItemType typeRef = type;
   SecItemImportExportKeyParameters parameters = {
     .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
     .passphrase = cfPassphrase,
     .keyAttributes = attributes,
   };
   CFArrayRef items = NULL;
-  OSStatus error = SecItemImport(keyData, cfFilename, &format, &type, 0, &parameters, NULL, &items);
+  OSStatus error = SecItemImport(keyData, cfFilename, &format, &typeRef, 0, &parameters, NULL, &items);
 
   CFRelease(attributes);
 
-  CFRelease(cfFilename);
+  if (cfFilename != NULL) {
+    CFRelease(cfFilename);
+  }
 
   if (cfPassphrase != NULL) {
     CFRelease(cfPassphrase);
@@ -150,6 +167,18 @@ static int _libssh2_rsa_new_from_binary_template(libssh2_rsa_ctx **rsa,
                                                  CSSM_KEYCLASS keyClass,
                                                  void const *bytes,
                                                  SecAsn1Template const *templates) {
+  SecExternalItemType type;
+  switch (keyClass) {
+    case CSSM_KEYCLASS_PRIVATE_KEY:
+      type = kSecItemTypePrivateKey;
+      break;
+    case CSSM_KEYCLASS_PUBLIC_KEY:
+      type = kSecItemTypePublicKey;
+      break;
+    default:
+      return 1;
+  }
+
   SecAsn1CoderRef coder = NULL;
   OSStatus error = SecAsn1CoderCreate(&coder);
   if (error != noErr) {
@@ -167,7 +196,7 @@ static int _libssh2_rsa_new_from_binary_template(libssh2_rsa_ctx **rsa,
 
   SecAsn1CoderRelease(coder);
 
-  int keyError = _libssh2_rsa_new_from_data(rsa, cfKeyData, ".pem", NULL);
+  int keyError = _libssh2_rsa_new_from_data(rsa, cfKeyData, type, NULL, NULL);
 
   CFRelease(cfKeyData);
 
@@ -281,7 +310,7 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
     return 1;
   }
 
-  int error = _libssh2_rsa_new_from_data(rsa, keyData, filename, (char const *)passphrase);
+  int error = _libssh2_rsa_new_from_data(rsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 
   CFRelease(keyData);
 
@@ -296,7 +325,34 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
   if (keyRef->KeyHeader.Format != CSSM_KEYBLOB_RAW_FORMAT_PKCS1) return NULL;
   if (keyRef->KeyHeader.KeyClass != CSSM_KEYCLASS_PRIVATE_KEY) return NULL;
 
-  return NULL;
+  SecAsn1CoderRef coder;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != errSecSuccess) {
+    return NULL;
+  }
+
+  _libssh2_pkcs1_rsa_private_key privateKeyData = {};
+  error = SecAsn1Decode(coder, keyRef->KeyData.Data, keyRef->KeyData.Length, _libssh2_pkcs1_rsa_private_key_template, &privateKeyData);
+  if (error != errSecSuccess) {
+    SecAsn1CoderRelease(coder);
+    return NULL;
+  }
+
+  _libssh2_pkcs1_rsa_public_key publicKeyData = {
+    .modulus = privateKeyData.modulus,
+    .publicExponent = privateKeyData.publicExponent,
+  };
+
+  SecKeyRef publicKey;
+  int keyError = _libssh2_rsa_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template);
+
+  SecAsn1CoderRelease(coder);
+
+  if (keyError != 0) {
+    return NULL;
+  }
+
+  return publicKey;
 }
 
 static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef privateKey) {
@@ -411,7 +467,7 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
     return 1;
   }
 
-  return 0;
+  return (output == kCFBooleanTrue ? 0 : 1);
 }
 
 /*
