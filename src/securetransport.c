@@ -250,10 +250,16 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
   assert(m != NULL);
 
   SecKeyRef publicKey = convert_rsa_private_key_to_public_key(rsa);
+  if (publicKey == NULL) {
+    return 1;
+  }
 
   CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
 
-  SecTransformRef transform = SecVerifyTransformCreate(rsa, signatureData, NULL);
+  SecTransformRef transform = SecVerifyTransformCreate(publicKey, signatureData, NULL);
+
+  CFRelease(publicKey);
+
   if (transform == NULL) {
     CFRelease(signatureData);
   }
