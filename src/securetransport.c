@@ -488,6 +488,11 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
                            size_t hash_len,
                            unsigned char **signature,
                            size_t *signature_len) {
+  assert(rsa != NULL);
+  assert(hash != NULL);
+  assert(signature != NULL);
+  assert(signature_len != NULL);
+
   SecTransformRef transform = SecSignTransformCreate(rsa, NULL);
   if (transform == NULL) {
     return 1;
