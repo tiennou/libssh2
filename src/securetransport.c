@@ -4,7 +4,47 @@
 
 #include "libssh2_priv.h"
 
-#pragma mark RSA
+#pragma mark Utilities
+
+static CFDataRef CreateDataFromFile(char const *path) {
+  CFStringRef keyFilePath = CFStringCreateWithCString(kCFAllocatorDefault, path, kCFStringEncodingUTF8);
+  CFURLRef keyFileLocation = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, keyFilePath, kCFURLPOSIXPathStyle, false);
+  CFRelease(keyFilePath);
+
+  CFReadStreamRef readStream = CFReadStreamCreateWithFile(kCFAllocatorDefault, keyFileLocation);
+  CFRelease(keyFileLocation);
+
+  if (!CFReadStreamOpen(readStream)) {
+    CFRelease(readStream);
+    return NULL;
+  }
+
+  CFMutableDataRef keyData = CFDataCreateMutable(kCFAllocatorDefault, 0);
+
+  size_t size = 1024;
+  uint8_t bytes[size];
+
+  while (1) {
+    CFIndex read = CFReadStreamRead(readStream, bytes, size);
+    if (read == 0) {
+      break;
+    }
+    else if (read < 0) {
+      CFRelease(keyData);
+      keyData = NULL;
+      break;
+    }
+
+    CFDataAppendBytes(keyData, bytes, read);
+  }
+
+  CFReadStreamClose(readStream);
+  CFRelease(readStream);
+
+  return (CFDataRef)keyData;
+}
+
+#pragma mark - RSA
 
 int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
   CFRelease(rsa);
@@ -71,6 +111,53 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
   assert(rsa != NULL);
   assert(filename != NULL);
 
+  CFDataRef keyData = CreateDataFromFile(filename);
+  if (keyData == NULL) {
+    return 1;
+  }
+
+  CFStringRef cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
+
+  CFStringRef cfPassphrase = NULL;
+  if (passphrase != NULL) {
+    cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
+  }
+
+  SecExternalFormat format = kSecFormatUnknown;
+  SecExternalItemType type = kSecItemTypePrivateKey;
+  SecItemImportExportKeyParameters parameters = {
+    .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
+    .passphrase = cfPassphrase,
+  };
+  CFArrayRef items = NULL;
+  OSStatus error = SecItemImport(keyData, cfFilename, &format, &type, 0, &parameters, NULL, &items);
+
+  CFRelease(keyData);
+  CFRelease(cfFilename);
+
+  if (cfPassphrase != NULL) {
+    CFRelease(cfPassphrase);
+  }
+
+  if (error != errSecSuccess) {
+    return 1;
+  }
+
+  if (CFArrayGetCount(items) > 1) {
+    CFRelease(items);
+    return 1;
+  }
+
+  CFTypeRef item = CFArrayGetValueAtIndex(items, 0);
+  if (CFGetTypeID(item) != SecKeyGetTypeID()) {
+    CFRelease(items);
+    return 1;
+  }
+
+  *rsa = (SecKeyRef)CFRetain(item);
+
+  CFRelease(items);
+
   return 0;
 }
 
@@ -94,6 +181,38 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
   assert(sig != NULL);
   assert(m != NULL);
 
+  CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
+
+  SecTransformRef transform = SecVerifyTransformCreate(rsa, signatureData, NULL);
+  if (transform == NULL) {
+    CFRelease(signatureData);
+  }
+
+  Boolean setAttributes = true;
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+
+  CFDataRef message = CFDataCreate(kCFAllocatorDefault, m, m_len);
+  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, message, NULL);
+
+  if (!setAttributes) {
+    CFRelease(message);
+    CFRelease(transform);
+    CFRelease(signatureData);
+    return 1;
+  }
+
+  CFErrorRef error = NULL;
+  CFTypeRef output = SecTransformExecute(transform, &error);
+
+  CFRelease(message);
+  CFRelease(transform);
+  CFRelease(signatureData);
+
+  if (output == NULL) {
+    CFRelease(error);
+    return 1;
+  }
+
   return 0;
 }
 
@@ -115,6 +234,36 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
                            size_t hash_len,
                            unsigned char **signature,
                            size_t *signature_len) {
+  SecTransformRef transform = SecSignTransformCreate(rsa, NULL);
+  if (transform == NULL) {
+    return 1;
+  }
+
+  Boolean setAttributes = true;
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+
+  CFDataRef inputData = CFDataCreate(kCFAllocatorDefault, hash, hash_len);
+  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, inputData, NULL);
+
+  if (!setAttributes) {
+    CFRelease(inputData);
+    CFRelease(transform);
+    return 1;
+  }
+
+  CFDataRef signatureData = SecTransformExecute(transform, NULL);
+
+  CFRelease(inputData);
+  CFRelease(transform);
+
+  if (signature == NULL) {
+    return 1;
+  }
+
+  *signature_len = CFDataGetLength(signatureData);
+  *signature = session ? LIBSSH2_ALLOC(session, *signature_len) : malloc(*signature_len);
+
+  CFDataGetBytes(signatureData, CFRangeMake(0, *signature_len), *signature);
   return 0;
 }
 

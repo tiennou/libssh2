@@ -39,8 +39,11 @@
 #define LIBSSH2_RSA 1
 #define LIBSSH2_DSA 1
 
-typedef SecKeyRef libssh2_rsa_ctx;
-typedef SecKeyRef libssh2_dsa_ctx;
+typedef struct OpaqueSecKeyRef libssh2_rsa_ctx;
+typedef struct OpaqueSecKeyRef libssh2_dsa_ctx;
+
+extern int _libssh2_rsa_free(libssh2_rsa_ctx *rsa);
+extern int _libssh2_dsa_free(libssh2_dsa_ctx *dsa);
 
 typedef struct {
 
