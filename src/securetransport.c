@@ -510,7 +510,7 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
   CFRelease(inputData);
   CFRelease(transform);
 
-  if (signature == NULL) {
+  if (signatureData == NULL) {
     return 1;
   }
 
