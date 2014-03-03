@@ -105,9 +105,9 @@ int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
 }
 
 static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
-  CFStringRef cfFilename = NULL;
+  CFURLRef cfLocation = NULL;
   if (filename != NULL) {
-    cfFilename = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), kCFStringEncodingASCII, false);
+    cfLocation = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), false);
   }
 
   CFStringRef cfPassphrase = NULL;
@@ -125,12 +125,15 @@ static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, 
     .keyAttributes = attributes,
   };
   CFArrayRef items = NULL;
-  OSStatus error = SecItemImport(keyData, cfFilename, &format, &typeRef, 0, &parameters, NULL, &items);
+
+  CFStringRef cfPath = (cfLocation ? CFURLGetString(cfLocation) : NULL);
+
+  OSStatus error = SecItemImport(keyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
 
   CFRelease(attributes);
 
-  if (cfFilename != NULL) {
-    CFRelease(cfFilename);
+  if (cfLocation != NULL) {
+    CFRelease(cfLocation);
   }
 
   if (cfPassphrase != NULL) {
