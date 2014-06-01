@@ -126,6 +126,63 @@ static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, 
   };
   CFArrayRef items = NULL;
 
+  do {
+    if (cfLocation == NULL) {
+      break;
+    }
+    if (cfPassphrase != NULL) {
+      break;
+    }
+
+    CFStringRef pathExtension = CFURLCopyPathExtension(cfLocation);
+    if (pathExtension == NULL) {
+      break;
+    }
+
+    // Non-encrypted PKCS#8 keys are not supported by `impExpPkcs8Import`
+    //
+    // To fake support for it, we have to wrap the binary key in a PEM container
+    // and then import it ¬_¬
+    CFRange p8Range = CFStringFind(pathExtension, CFSTR("p8"), kCFCompareCaseInsensitive);
+    CFRelease(pathExtension);
+
+    if (p8Range.location != 0) {
+      break;
+    }
+
+    SecTransformRef encodeTransform = SecEncodeTransformCreate(kSecBase64Encoding, NULL);
+    if (encodeTransform == NULL) {
+      break;
+    }
+    Boolean setInput = SecTransformSetAttribute(encodeTransform, kSecTransformInputAttributeName, keyData, NULL);
+    if (!setInput) {
+      CFRelease(encodeTransform);
+    }
+
+    CFDataRef encodedKeyData = SecTransformExecute(encodeTransform, NULL);
+    CFRelease(encodeTransform);
+
+    if (encodedKeyData == NULL) {
+      break;
+    }
+
+    CFMutableDataRef pemData = CFDataCreateMutable(kCFAllocatorDefault, 0);
+    char const *pemPrefix = "-----BEGIN PRIVATE KEY-----\n";
+    CFDataAppendBytes(pemData, (const uint8_t *)pemPrefix, strlen(pemPrefix));
+    CFDataAppendBytes(pemData, CFDataGetBytePtr(encodedKeyData), CFDataGetLength(encodedKeyData));
+    char const *pemSuffix = "\n-----END PRIVATE KEY-----";
+    CFDataAppendBytes(pemData, (const uint8_t *)pemSuffix, strlen(pemSuffix));
+
+    CFRelease(encodedKeyData);
+
+    keyData = pemData;
+
+    CFURLRef newLocation = CFURLCreateCopyDeletingPathExtension(kCFAllocatorDefault, cfLocation);
+    CFRelease(cfLocation);
+    cfLocation = CFURLCreateCopyAppendingPathExtension(kCFAllocatorDefault, newLocation, CFSTR("pem"));
+    CFRelease(newLocation);
+  } while (0);
+
   CFStringRef cfPath = (cfLocation ? CFURLGetString(cfLocation) : NULL);
 
   OSStatus error = SecItemImport(keyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
@@ -290,8 +347,13 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
 /*
     Create an RSA private key from a file.
 
-    Should support PKCS#1 and PKCS#8 keys, both encrypted and unencrypted.
-    PKCS#8 keys may be PEM or DER encoded.
+    Supported formats:
+ 
+        Format  | Encrypted | Non-encrypted |
+    
+    PKCS#1 PEM        x             x
+    PKCS#8 DER        x             x
+    PKCS#8 PEM        x             x
  
     rsa        - Out parameter, should be populated on successful return.
     session    - Non-NULL when invoked from libssh2.
