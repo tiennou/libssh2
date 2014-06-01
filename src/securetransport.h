@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Keith Duncan */
+/* Copyright (C) 2013-2014 Keith Duncan */
 
 #import <Security/Security.h>
 #import <CommonCrypto/CommonCrypto.h>

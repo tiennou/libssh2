@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Keith Duncan */
+/* Copyright (C) 2013-2014 Keith Duncan */
 
 #import "securetransport.h"
 
