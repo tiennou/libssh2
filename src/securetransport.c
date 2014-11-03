@@ -650,6 +650,8 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
     m       - Binary message, non NULL.
     m_len   - Length of m, non zero.
  
+    `sig` must be of length `SHA_DIGEST_LENGTH`.
+ 
     Returns 0 if the signature is valid, 1 otherwise.
  */
 int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
@@ -668,7 +670,7 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
     dsa           - Initialised DSA key, non NULL.
     hash          - In parameter, SHA1 hash bytes.
     hash_len      - In parameter, length of hash.
-    signature     - In parameter, pre malloced.
+    signature     - In parameter, pre malloced size of `SHA_DIGEST_LENGTH`.
  
     Returns 0 if the signature has been populated, 1 otherwise.
  */
