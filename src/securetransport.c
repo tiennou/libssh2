@@ -268,7 +268,8 @@ static int _libssh2_rsa_new_from_binary_template(libssh2_rsa_ctx **rsa,
 /*
     Create an RSA private key from the raw numeric components.
 
-    rsa - Out parameter, should be populated on successful return.
+    rsa                          - Out parameter, should be populated on
+                                   successful return.
     e, n, d, p, q, e1, e2, coeff - Positive integer in big-endian form.
 
     Returns 0 if the key is created, 1 otherwise.
@@ -601,7 +602,7 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
 /*
     Create a DSA private key from the raw numeric components.
   
-    dsa - Out parameter, should be populated on successful return.
+    dsa           - Out parameter, should be populated on successful return.
     p, q, g, y, x - Positive integer in big-endian form.
  
     Returns 0 if the key is created, 1 otherwise.
@@ -622,9 +623,15 @@ int _libssh2_dsa_new(libssh2_dsa_ctx ** dsa,
 
 /*
     Create a DSA private key from a file.
- 
-    Keys can be encoded as FIPS186 or PKCS#8.
- 
+
+    Supported formats:
+
+    Format      | Encrypted | Non-encrypted |
+
+    FIPS186           ?             ?
+    PKCS#8 DER        ?             ?
+    PKCS#8 PEM        ?             ?
+
     dsa        - Out parameter, should be populated on successful return.
     session    - In parameter, non NULL when invoked from libssh2.
     filename   - nul terminated C string, path to the private key file.
