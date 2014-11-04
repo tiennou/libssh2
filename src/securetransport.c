@@ -648,7 +648,17 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
                              unsigned const char *passphrase) {
   assert(dsa != NULL);
   assert(filename != NULL);
-  return 0;
+
+  CFDataRef keyData = CreateDataFromFile(filename);
+  if (keyData == NULL) {
+    return 1;
+  }
+
+  int error = _libssh2_rsa_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
+
+  CFRelease(keyData);
+
+  return error;
 }
 
 /*
@@ -670,7 +680,7 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
   assert(dsa != NULL);
   assert(sig != NULL);
   assert(m != NULL);
-  return 0;
+  return 1;
 }
 
 /*
@@ -690,7 +700,7 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
   assert(dsa != NULL);
   assert(hash != NULL);
   assert(sig != NULL);
-  return 0;
+  return 1;
 }
 
 #pragma mark - Ciphers
