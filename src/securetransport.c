@@ -353,8 +353,9 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
         Format  | Encrypted | Non-encrypted |
     
     PKCS#1 PEM        x             x
-    PKCS#8 DER        x             x
+    PKCS#1 DER        x             x
     PKCS#8 PEM        x             x
+    PKCS#8 DER        x             x
  
     rsa        - Out parameter, should be populated on successful return.
     session    - Non-NULL when invoked from libssh2.
@@ -628,9 +629,11 @@ int _libssh2_dsa_new(libssh2_dsa_ctx ** dsa,
 
     Format      | Encrypted | Non-encrypted |
 
+    PKCS#1 PEM        x             x
+    PKCS#1 DER        x             x
+    PKCS#8 PEM        x             x
+    PKCS#8 DER        x             x
     FIPS186           ?             ?
-    PKCS#8 DER        ?             ?
-    PKCS#8 PEM        ?             ?
 
     dsa        - Out parameter, should be populated on successful return.
     session    - In parameter, non NULL when invoked from libssh2.
