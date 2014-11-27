@@ -45,6 +45,62 @@ static CFDataRef CreateDataFromFile(char const *path) {
   return (CFDataRef)keyData;
 }
 
+/*
+    Sign a hash with a private key.
+
+    session       - In, non NULL when invoked from libssh2.
+    rsa           - Initialised RSA or DSA key, non NULL.
+    hash          - In parameter, hash bytes.
+    hash_len      - In parameter, length of hash.
+    signature     - Out parameter, malloced.
+    signature_len - Out parameter, length of malloced signature.
+
+    Returns 0 if the signature has been populated, 1 otherwise.
+ */
+int _libssh2_key_sha1_sign(LIBSSH2_SESSION *session,
+                           SecKeyRef key,
+                           const unsigned char *hash,
+                           size_t hash_len,
+                           unsigned char **signature,
+                           size_t *signature_len) {
+  assert(key != NULL);
+  assert(hash != NULL);
+  assert(signature != NULL);
+  assert(signature_len != NULL);
+
+  SecTransformRef transform = SecSignTransformCreate(key, NULL);
+  if (transform == NULL) {
+    return 1;
+  }
+
+  Boolean setAttributes = true;
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+
+  CFDataRef inputData = CFDataCreate(kCFAllocatorDefault, hash, hash_len);
+  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, inputData, NULL);
+
+  if (!setAttributes) {
+    CFRelease(inputData);
+    CFRelease(transform);
+    return 1;
+  }
+
+  CFDataRef signatureData = SecTransformExecute(transform, NULL);
+
+  CFRelease(inputData);
+  CFRelease(transform);
+
+  if (signatureData == NULL) {
+    return 1;
+  }
+
+  *signature_len = CFDataGetLength(signatureData);
+  *signature = session ? LIBSSH2_ALLOC(session, *signature_len) : malloc(*signature_len);
+
+  CFDataGetBytes(signatureData, CFRangeMake(0, *signature_len), *signature);
+  return 0;
+}
+
 #pragma mark - PKCS#1
 
 #pragma clang diagnostic push
@@ -549,48 +605,13 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
  
     Returns 0 if the signature has been populated, 1 otherwise.
  */
-int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
-                           libssh2_rsa_ctx * rsa,
+int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION *session,
+                           libssh2_rsa_ctx *rsa,
                            const unsigned char *hash,
                            size_t hash_len,
                            unsigned char **signature,
                            size_t *signature_len) {
-  assert(rsa != NULL);
-  assert(hash != NULL);
-  assert(signature != NULL);
-  assert(signature_len != NULL);
-
-  SecTransformRef transform = SecSignTransformCreate(rsa, NULL);
-  if (transform == NULL) {
-    return 1;
-  }
-
-  Boolean setAttributes = true;
-  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
-
-  CFDataRef inputData = CFDataCreate(kCFAllocatorDefault, hash, hash_len);
-  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, inputData, NULL);
-
-  if (!setAttributes) {
-    CFRelease(inputData);
-    CFRelease(transform);
-    return 1;
-  }
-
-  CFDataRef signatureData = SecTransformExecute(transform, NULL);
-
-  CFRelease(inputData);
-  CFRelease(transform);
-
-  if (signatureData == NULL) {
-    return 1;
-  }
-
-  *signature_len = CFDataGetLength(signatureData);
-  *signature = session ? LIBSSH2_ALLOC(session, *signature_len) : malloc(*signature_len);
-
-  CFDataGetBytes(signatureData, CFRangeMake(0, *signature_len), *signature);
-  return 0;
+  return _libssh2_key_sha1_sign(session, rsa, hash, hash_len, signature, signature_len);
 }
 
 #pragma mark - DSA
@@ -663,14 +684,14 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
 
 /*
     Verify a DSA signature with an DSA key.
-    
+
     dsa     - Initialised DSA key, non NULL.
     sig     - Binary data, non NULL.
     m       - Binary message, non NULL.
     m_len   - Length of m, non zero.
- 
+
     `sig` must be of length `SHA_DIGEST_LENGTH`.
- 
+
     Returns 0 if the signature is valid, 1 otherwise.
  */
 int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
@@ -686,21 +707,45 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
 /*
     Sign a SHA1 hash with a DSA key.
 
-    dsa           - Initialised DSA key, non NULL.
-    hash          - In parameter, SHA1 hash bytes.
-    hash_len      - In parameter, length of hash.
-    signature     - In parameter, pre malloced size of `SHA_DIGEST_LENGTH`.
- 
+    dsa       - Initialised DSA key, non NULL.
+    hash      - In parameter, SHA1 hash bytes.
+    hash_len  - In parameter, length of hash.
+    signature - In parameter, pre malloced buffer of 40 zeroed bytes.
+
     Returns 0 if the signature has been populated, 1 otherwise.
  */
 int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
                            const unsigned char *hash,
                            unsigned long hash_len,
-                           unsigned char *sig) {
-  assert(dsa != NULL);
-  assert(hash != NULL);
-  assert(sig != NULL);
-  return 1;
+                           unsigned char sig_out[40]) {
+  unsigned char *sig;
+  size_t sig_len;
+  int error = _libssh2_key_sha1_sign(NULL, dsa, hash, hash_len, &sig, &sig_len);
+  if (error != 0) {
+    return error;
+  }
+
+  /*
+      DSA key signatures are encoded in the following ASN.1 schema before being
+      returned.
+
+      Dss-Sig-Value  ::=  SEQUENCE  {
+        r       INTEGER,
+        s       INTEGER  }
+
+      libssh2 expects the raw two 160 bit / 20 byte integers, decode and pack
+      them.
+   */
+
+  if (sig_len > sizeof(*sig_out)) {
+    free(sig);
+    return 1;
+  }
+
+  memcpy(sig_out, sig, sig_len);
+  free(sig);
+
+  return 0;
 }
 
 #pragma mark - Ciphers
