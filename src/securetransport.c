@@ -704,6 +704,18 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
   return 1;
 }
 
+typedef struct {
+  CSSM_DATA r;
+  CSSM_DATA s;
+} _libssh2_dsa_signature;
+
+static SecAsn1Template const _libssh2_dsa_signature_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_dsa_signature) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, r) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, s) },
+  { },
+};
+
 /*
     Sign a SHA1 hash with a DSA key.
 
@@ -720,14 +732,14 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
                            unsigned char sig_out[40]) {
   unsigned char *sig;
   size_t sig_len;
-  int error = _libssh2_key_sha1_sign(NULL, dsa, hash, hash_len, &sig, &sig_len);
+  OSStatus error = _libssh2_key_sha1_sign(NULL, dsa, hash, hash_len, &sig, &sig_len);
   if (error != 0) {
     return error;
   }
 
   /*
       DSA key signatures are encoded in the following ASN.1 schema before being
-      returned.
+      returned by the sign transformation.
 
       Dss-Sig-Value  ::=  SEQUENCE  {
         r       INTEGER,
@@ -737,12 +749,25 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
       them.
    */
 
-  if (sig_len > sizeof(*sig_out)) {
+  SecAsn1CoderRef coder = NULL;
+  error = SecAsn1CoderCreate(&coder);
+  if (error != noErr) {
     free(sig);
     return 1;
   }
 
-  memcpy(sig_out, sig, sig_len);
+  _libssh2_dsa_signature dsa_signature;
+  error = SecAsn1Decode(coder, sig, sig_len, _libssh2_dsa_signature_template, &dsa_signature);
+  if (error != noErr || (dsa_signature.r.Length != 20 || dsa_signature.s.Length != 20)) {
+    SecAsn1CoderRelease(coder);
+    free(sig);
+    return 1;
+  }
+
+  memcpy(sig_out, dsa_signature.r.Data, 20);
+  memcpy(sig_out + 20, dsa_signature.s.Data, 20);
+
+  SecAsn1CoderRelease(coder);
   free(sig);
 
   return 0;
