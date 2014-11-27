@@ -49,7 +49,7 @@ static CFDataRef CreateDataFromFile(char const *path) {
     Sign a hash with a private key.
 
     session       - In, non NULL when invoked from libssh2.
-    rsa           - Initialised RSA or DSA key, non NULL.
+    key           - Initialised private key, non NULL.
     hash          - In parameter, hash bytes.
     hash_len      - In parameter, length of hash.
     signature     - Out parameter, malloced.
@@ -57,12 +57,12 @@ static CFDataRef CreateDataFromFile(char const *path) {
 
     Returns 0 if the signature has been populated, 1 otherwise.
  */
-int _libssh2_key_sha1_sign(LIBSSH2_SESSION *session,
-                           SecKeyRef key,
-                           const unsigned char *hash,
-                           size_t hash_len,
-                           unsigned char **signature,
-                           size_t *signature_len) {
+static int _libssh2_key_sign_hash(LIBSSH2_SESSION *session,
+                                  SecKeyRef key,
+                                  const unsigned char *hash,
+                                  size_t hash_len,
+                                  unsigned char **signature,
+                                  size_t *signature_len) {
   assert(key != NULL);
   assert(hash != NULL);
   assert(signature != NULL);
@@ -99,6 +99,62 @@ int _libssh2_key_sha1_sign(LIBSSH2_SESSION *session,
 
   CFDataGetBytes(signatureData, CFRangeMake(0, *signature_len), *signature);
   return 0;
+}
+
+/*
+    Verify a hash signature with a public key.
+  
+    rsa     - Initialised public key, non NULL.
+    sig     - Binary data, non NULL.
+    sig_len - Length of sig, non zero.
+    m       - Binary message, non NULL.
+    m_len   - Length of m, non zero.
+
+    Returns true if the signature is valid, false otherwise.
+ */
+static bool _libssh2_key_verify_hash(SecKeyRef key,
+                                     const unsigned char *sig,
+                                     unsigned long sig_len,
+                                     const unsigned char *m,
+                                     unsigned long m_len) {
+  assert(key != NULL);
+  assert(sig != NULL);
+  assert(m != NULL);
+
+  CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
+
+  SecTransformRef transform = SecVerifyTransformCreate(key, signatureData, NULL);
+
+  if (transform == NULL) {
+    CFRelease(signatureData);
+  }
+
+  Boolean setAttributes = true;
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+
+  CFDataRef message = CFDataCreate(kCFAllocatorDefault, m, m_len);
+  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, message, NULL);
+
+  if (!setAttributes) {
+    CFRelease(message);
+    CFRelease(transform);
+    CFRelease(signatureData);
+    return false;
+  }
+
+  CFErrorRef error = NULL;
+  CFTypeRef output = SecTransformExecute(transform, &error);
+
+  CFRelease(message);
+  CFRelease(transform);
+  CFRelease(signatureData);
+
+  if (output == NULL) {
+    CFRelease(error);
+    return false;
+  }
+
+  return (output == kCFBooleanTrue);
 }
 
 #pragma mark - PKCS#1
@@ -555,42 +611,11 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
     return 1;
   }
 
-  CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
-
-  SecTransformRef transform = SecVerifyTransformCreate(publicKey, signatureData, NULL);
+  bool verify = _libssh2_key_verify_hash(publicKey, sig, sig_len, m, m_len);
 
   CFRelease(publicKey);
 
-  if (transform == NULL) {
-    CFRelease(signatureData);
-  }
-
-  Boolean setAttributes = true;
-  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
-
-  CFDataRef message = CFDataCreate(kCFAllocatorDefault, m, m_len);
-  setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, message, NULL);
-
-  if (!setAttributes) {
-    CFRelease(message);
-    CFRelease(transform);
-    CFRelease(signatureData);
-    return 1;
-  }
-
-  CFErrorRef error = NULL;
-  CFTypeRef output = SecTransformExecute(transform, &error);
-
-  CFRelease(message);
-  CFRelease(transform);
-  CFRelease(signatureData);
-
-  if (output == NULL) {
-    CFRelease(error);
-    return 1;
-  }
-
-  return (output == kCFBooleanTrue ? 0 : 1);
+  return verify;
 }
 
 /*
@@ -611,7 +636,7 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION *session,
                            size_t hash_len,
                            unsigned char **signature,
                            size_t *signature_len) {
-  return _libssh2_key_sha1_sign(session, rsa, hash, hash_len, signature, signature_len);
+  return _libssh2_key_sign_hash(session, rsa, hash, hash_len, signature, signature_len);
 }
 
 #pragma mark - DSA
@@ -701,7 +726,17 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
   assert(dsa != NULL);
   assert(sig != NULL);
   assert(m != NULL);
-  return 1;
+
+  SecKeyRef publicKey = convert_dsa_private_key_to_public_key(dsa);
+  if (publicKey == NULL) {
+    return 1;
+  }
+
+  bool verify = _libssh2_key_verify_hash(publicKey, sig, 40, m, m_len);
+
+  CFRelease(publicKey);
+
+  return verify;
 }
 
 typedef struct {
@@ -732,7 +767,7 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
                            unsigned char sig_out[40]) {
   unsigned char *sig;
   size_t sig_len;
-  OSStatus error = _libssh2_key_sha1_sign(NULL, dsa, hash, hash_len, &sig, &sig_len);
+  OSStatus error = _libssh2_key_sign_hash(NULL, dsa, hash, hash_len, &sig, &sig_len);
   if (error != 0) {
     return error;
   }
