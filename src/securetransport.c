@@ -255,6 +255,138 @@ static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
 
 #pragma clang diagnostic pop
 
+static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, char const *footer) {
+  SecTransformRef encodeTransform = SecEncodeTransformCreate(kSecBase64Encoding, NULL);
+  if (encodeTransform == NULL) {
+    return NULL;
+  }
+  Boolean setInput = SecTransformSetAttribute(encodeTransform, kSecTransformInputAttributeName, data, NULL);
+  if (!setInput) {
+    CFRelease(encodeTransform);
+    return NULL;
+  }
+
+  CFDataRef encodedKeyData = SecTransformExecute(encodeTransform, NULL);
+  CFRelease(encodeTransform);
+
+  if (encodedKeyData == NULL) {
+    return NULL;
+  }
+
+  CFMutableDataRef pemData = CFDataCreateMutable(kCFAllocatorDefault, 0);
+  CFDataAppendBytes(pemData, (const uint8_t *)header, strlen(header));
+  CFDataAppendBytes(pemData, CFDataGetBytePtr(encodedKeyData), CFDataGetLength(encodedKeyData));
+  CFDataAppendBytes(pemData, (const uint8_t *)footer, strlen(footer));
+
+  CFRelease(encodedKeyData);
+
+  return pemData;
+}
+
+static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
+  CFURLRef cfLocation = NULL;
+  if (filename != NULL) {
+    cfLocation = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), false);
+  }
+
+  CFStringRef cfPassphrase = NULL;
+  if (passphrase != NULL) {
+    cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
+  }
+
+  CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
+
+  SecExternalFormat format = kSecFormatUnknown;
+  SecExternalItemType typeRef = type;
+  SecItemImportExportKeyParameters parameters = {
+    .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
+    .passphrase = cfPassphrase,
+    .keyAttributes = attributes,
+  };
+  CFArrayRef items = NULL;
+
+  CFDataRef newKeyData = CFRetain(keyData);
+
+  do {
+    if (cfLocation == NULL) {
+      break;
+    }
+    if (cfPassphrase != NULL) {
+      break;
+    }
+    if (type != kSecItemTypePrivateKey) {
+      break;
+    }
+
+    CFStringRef pathExtension = CFURLCopyPathExtension(cfLocation);
+    if (pathExtension == NULL) {
+      break;
+    }
+
+    // Non-encrypted PKCS#8 keys are not supported by `impExpPkcs8Import`
+    //
+    // To fake support for it, we have to wrap the binary key in a PEM container
+    // and then import it ¬_¬
+    CFRange p8Range = CFStringFind(pathExtension, CFSTR("p8"), kCFCompareCaseInsensitive);
+    CFRelease(pathExtension);
+
+    if (p8Range.location != 0) {
+      break;
+    }
+
+    char const *pemPrefix = "-----BEGIN PRIVATE KEY-----\n";
+    char const *pemSuffix = "\n-----END PRIVATE KEY-----";
+    CFDataRef pemData = _libssh2_wrap_data_in_pem(keyData, pemPrefix, pemSuffix);
+    if (pemData == NULL) {
+      break;
+    }
+
+    CFRelease(newKeyData);
+    newKeyData = pemData;
+
+    CFURLRef newLocation = CFURLCreateCopyDeletingPathExtension(kCFAllocatorDefault, cfLocation);
+    CFRelease(cfLocation);
+    cfLocation = CFURLCreateCopyAppendingPathExtension(kCFAllocatorDefault, newLocation, CFSTR("pem"));
+    CFRelease(newLocation);
+  } while (0);
+
+  CFStringRef cfPath = (cfLocation ? CFURLGetString(cfLocation) : NULL);
+
+  OSStatus error = SecItemImport(keyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
+
+  CFRelease(newKeyData);
+  CFRelease(attributes);
+
+  if (cfLocation != NULL) {
+    CFRelease(cfLocation);
+  }
+
+  if (cfPassphrase != NULL) {
+    CFRelease(cfPassphrase);
+  }
+
+  if (error != errSecSuccess) {
+    return 1;
+  }
+
+  if (CFArrayGetCount(items) > 1) {
+    CFRelease(items);
+    return 1;
+  }
+
+  CFTypeRef item = CFArrayGetValueAtIndex(items, 0);
+  if (CFGetTypeID(item) != SecKeyGetTypeID()) {
+    CFRelease(items);
+    return 1;
+  }
+
+  *keyRef = (SecKeyRef)CFRetain(item);
+  
+  CFRelease(items);
+  
+  return 0;
+}
+
 #pragma mark - PKCS#1 RSA
 
 #pragma clang diagnostic push
@@ -311,121 +443,6 @@ static SecAsn1Template const _libssh2_pkcs1_rsa_public_key_template[] = {
 
 int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
   CFRelease(rsa);
-  return 0;
-}
-
-static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
-  CFURLRef cfLocation = NULL;
-  if (filename != NULL) {
-    cfLocation = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault, (UInt8 const *)filename, strlen(filename), false);
-  }
-
-  CFStringRef cfPassphrase = NULL;
-  if (passphrase != NULL) {
-    cfPassphrase = CFStringCreateWithBytes(kCFAllocatorDefault, (UInt8 const *)passphrase, strlen((const char *)passphrase), kCFStringEncodingASCII, false);
-  }
-
-  CFArrayRef attributes = CFArrayCreate(kCFAllocatorDefault, (void const **)&kSecAttrIsExtractable, 1, &kCFTypeArrayCallBacks);
-
-  SecExternalFormat format = kSecFormatUnknown;
-  SecExternalItemType typeRef = type;
-  SecItemImportExportKeyParameters parameters = {
-    .version = SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION,
-    .passphrase = cfPassphrase,
-    .keyAttributes = attributes,
-  };
-  CFArrayRef items = NULL;
-
-  do {
-    if (cfLocation == NULL) {
-      break;
-    }
-    if (cfPassphrase != NULL) {
-      break;
-    }
-
-    CFStringRef pathExtension = CFURLCopyPathExtension(cfLocation);
-    if (pathExtension == NULL) {
-      break;
-    }
-
-    // Non-encrypted PKCS#8 keys are not supported by `impExpPkcs8Import`
-    //
-    // To fake support for it, we have to wrap the binary key in a PEM container
-    // and then import it ¬_¬
-    CFRange p8Range = CFStringFind(pathExtension, CFSTR("p8"), kCFCompareCaseInsensitive);
-    CFRelease(pathExtension);
-
-    if (p8Range.location != 0) {
-      break;
-    }
-
-    SecTransformRef encodeTransform = SecEncodeTransformCreate(kSecBase64Encoding, NULL);
-    if (encodeTransform == NULL) {
-      break;
-    }
-    Boolean setInput = SecTransformSetAttribute(encodeTransform, kSecTransformInputAttributeName, keyData, NULL);
-    if (!setInput) {
-      CFRelease(encodeTransform);
-    }
-
-    CFDataRef encodedKeyData = SecTransformExecute(encodeTransform, NULL);
-    CFRelease(encodeTransform);
-
-    if (encodedKeyData == NULL) {
-      break;
-    }
-
-    CFMutableDataRef pemData = CFDataCreateMutable(kCFAllocatorDefault, 0);
-    char const *pemPrefix = "-----BEGIN PRIVATE KEY-----\n";
-    CFDataAppendBytes(pemData, (const uint8_t *)pemPrefix, strlen(pemPrefix));
-    CFDataAppendBytes(pemData, CFDataGetBytePtr(encodedKeyData), CFDataGetLength(encodedKeyData));
-    char const *pemSuffix = "\n-----END PRIVATE KEY-----";
-    CFDataAppendBytes(pemData, (const uint8_t *)pemSuffix, strlen(pemSuffix));
-
-    CFRelease(encodedKeyData);
-
-    keyData = pemData;
-
-    CFURLRef newLocation = CFURLCreateCopyDeletingPathExtension(kCFAllocatorDefault, cfLocation);
-    CFRelease(cfLocation);
-    cfLocation = CFURLCreateCopyAppendingPathExtension(kCFAllocatorDefault, newLocation, CFSTR("pem"));
-    CFRelease(newLocation);
-  } while (0);
-
-  CFStringRef cfPath = (cfLocation ? CFURLGetString(cfLocation) : NULL);
-
-  OSStatus error = SecItemImport(keyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
-
-  CFRelease(attributes);
-
-  if (cfLocation != NULL) {
-    CFRelease(cfLocation);
-  }
-
-  if (cfPassphrase != NULL) {
-    CFRelease(cfPassphrase);
-  }
-
-  if (error != errSecSuccess) {
-    return 1;
-  }
-
-  if (CFArrayGetCount(items) > 1) {
-    CFRelease(items);
-    return 1;
-  }
-
-  CFTypeRef item = CFArrayGetValueAtIndex(items, 0);
-  if (CFGetTypeID(item) != SecKeyGetTypeID()) {
-    CFRelease(items);
-    return 1;
-  }
-
-  *rsa = (SecKeyRef)CFRetain(item);
-
-  CFRelease(items);
-
   return 0;
 }
 
@@ -506,7 +523,7 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
       .Data = (uint8_t *)coeffdata,
     },
   };
-  return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template, &_libssh2_rsa_new_from_data);
+  return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template, &_libssh2_key_new_from_data);
 }
 
 /*
@@ -541,7 +558,7 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
     return 1;
   }
 
-  int error = _libssh2_rsa_new_from_data(rsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
+  int error = _libssh2_key_new_from_data(rsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 
   CFRelease(keyData);
 
@@ -575,7 +592,7 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
   };
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template, &_libssh2_rsa_new_from_data);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template, &_libssh2_key_new_from_data);
 
   SecAsn1CoderRelease(coder);
 
@@ -709,8 +726,18 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
   return 0;
 }
 
-static int _libssh2_dsa_new_from_data(libssh2_dsa_ctx **dsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
-  return _libssh2_rsa_new_from_data(dsa, keyData, type, filename, passphrase);
+static int _libssh2_dsa_new_public_from_data(libssh2_dsa_ctx **dsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
+  /*
+      The only code path through `SecItemImport` whereby we get the
+      (kSecItemTypePublicKey, kSecFormatOpenSSL, CSSM_ALGID_DSA) tuple is
+   		through PEM decoding.
+
+      Wrap the key in PEM then call the normal from_data function.
+   */
+
+
+
+  return _libssh2_key_new_from_data(dsa, , <#SecExternalItemType type#>, <#const char *filename#>, <#const char *passphrase#>);
 }
 
 /*
@@ -767,7 +794,7 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
       .Length = xlen,
     },
   };
-  return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template, &_libssh2_dsa_new_from_data);
+  return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template, &_libssh2_key_new_from_data);
 }
 
 /*
@@ -802,7 +829,7 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
     return 1;
   }
 
-  int error = _libssh2_dsa_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
+  int error = _libssh2_key_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 
   CFRelease(keyData);
 
@@ -844,7 +871,7 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
   }
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_dsa_new_from_data);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_dsa_new_public_from_data);
 
   SecAsn1CoderRelease(coder);
 
