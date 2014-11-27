@@ -694,8 +694,8 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
 
     Returns 0 if the signature is valid, 1 otherwise.
  */
-int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsa,
-                             const unsigned char *sig,
+int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
+                             const unsigned char sig[40],
                              const unsigned char *m,
                              unsigned long m_len) {
   assert(dsa != NULL);
