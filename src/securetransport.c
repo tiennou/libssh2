@@ -4,6 +4,7 @@
 
 #include "libssh2_priv.h"
 #include <Security/SecAsn1Coder.h>
+#include <Security/SecAsn1Templates.h>
 
 #pragma mark Utilities
 
@@ -157,7 +158,104 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
   return (output == kCFBooleanTrue);
 }
 
-#pragma mark - PKCS#1
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+static SecKeyRef convert_private_key_to_public_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT format, SecKeyRef (*convert)(CSSM_KEY const *)) {
+  CSSM_KEY const *keyRef;
+  OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
+  if (error != errSecSuccess) {
+    return NULL;
+  }
+
+  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_REFERENCE) {
+    CSSM_CSP_HANDLE csp;
+    error = SecKeyGetCSPHandle(privateKey, &csp);
+    if (error != errSecSuccess) {
+      return NULL;
+    }
+
+    CSSM_KEY rawKey = {};
+    CSSM_ACCESS_CREDENTIALS credentials = {};
+
+    CSSM_CC_HANDLE context;
+    CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
+    if (cssmError != CSSM_OK) {
+      return NULL;
+    }
+
+    CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
+      .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
+      .AttributeLength = sizeof(uint32),
+      .Attribute.Uint32 = format,
+    };
+    cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
+    if (cssmError != CSSM_OK) {
+      CSSM_DeleteContext(context);
+      return NULL;
+    }
+
+    cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
+    if (cssmError != CSSM_OK) {
+      CSSM_DeleteContext(context);
+      return NULL;
+    }
+
+    SecKeyRef publicKey = convert(&rawKey);
+
+    CSSM_DeleteContext(context);
+
+    return publicKey;
+  }
+
+  return convert(keyRef);
+}
+
+static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
+                                             CSSM_KEYBLOB_FORMAT format,
+                                             CSSM_KEYCLASS keyClass,
+                                             void const *bytes,
+                                             SecAsn1Template const *templates,
+                                             int (*create)(SecKeyRef *, CFDataRef, SecExternalItemType, char const *, char const *)) {
+  SecExternalItemType type;
+  switch (keyClass) {
+    case CSSM_KEYCLASS_PRIVATE_KEY:
+      type = kSecItemTypePrivateKey;
+      break;
+    case CSSM_KEYCLASS_PUBLIC_KEY:
+      type = kSecItemTypePublicKey;
+      break;
+    default:
+      return 1;
+  }
+
+  SecAsn1CoderRef coder = NULL;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != noErr) {
+    return 1;
+  }
+
+  CSSM_DATA keyData = {};
+  error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
+  if (error != noErr) {
+    SecAsn1CoderRelease(coder);
+    return 1;
+  }
+
+  CFDataRef cfKeyData = CFDataCreate(kCFAllocatorDefault, keyData.Data, keyData.Length);
+
+  SecAsn1CoderRelease(coder);
+
+  int keyError = create(keyRef, cfKeyData, type, NULL, NULL);
+
+  CFRelease(cfKeyData);
+
+  return keyError;
+}
+
+#pragma clang diagnostic pop
+
+#pragma mark - PKCS#1 RSA
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -331,52 +429,6 @@ static int _libssh2_rsa_new_from_data(libssh2_rsa_ctx **rsa, CFDataRef keyData, 
   return 0;
 }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-
-static int _libssh2_rsa_new_from_binary_template(libssh2_rsa_ctx **rsa,
-                                                 CSSM_KEYBLOB_FORMAT format,
-                                                 CSSM_KEYCLASS keyClass,
-                                                 void const *bytes,
-                                                 SecAsn1Template const *templates) {
-  SecExternalItemType type;
-  switch (keyClass) {
-    case CSSM_KEYCLASS_PRIVATE_KEY:
-      type = kSecItemTypePrivateKey;
-      break;
-    case CSSM_KEYCLASS_PUBLIC_KEY:
-      type = kSecItemTypePublicKey;
-      break;
-    default:
-      return 1;
-  }
-
-  SecAsn1CoderRef coder = NULL;
-  OSStatus error = SecAsn1CoderCreate(&coder);
-  if (error != noErr) {
-    return 1;
-  }
-
-  CSSM_DATA keyData = {};
-  error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
-  if (error != noErr) {
-    SecAsn1CoderRelease(coder);
-    return 1;
-  }
-
-  CFDataRef cfKeyData = CFDataCreate(kCFAllocatorDefault, keyData.Data, keyData.Length);
-
-  SecAsn1CoderRelease(coder);
-
-  int keyError = _libssh2_rsa_new_from_data(rsa, cfKeyData, type, NULL, NULL);
-
-  CFRelease(cfKeyData);
-
-  return keyError;
-}
-
-#pragma clang diagnostic pop
-
 /*
     Create an RSA private key from the raw numeric components.
 
@@ -454,7 +506,7 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
       .Data = (uint8_t *)coeffdata,
     },
   };
-  return _libssh2_rsa_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template);
+  return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template, &_libssh2_rsa_new_from_data);
 }
 
 /*
@@ -510,7 +562,7 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
     return NULL;
   }
 
-  _libssh2_pkcs1_rsa_private_key privateKeyData = {};
+  _libssh2_pkcs1_rsa_private_key privateKeyData;
   error = SecAsn1Decode(coder, keyRef->KeyData.Data, keyRef->KeyData.Length, _libssh2_pkcs1_rsa_private_key_template, &privateKeyData);
   if (error != errSecSuccess) {
     SecAsn1CoderRelease(coder);
@@ -523,7 +575,7 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
   };
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_rsa_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template, &_libssh2_rsa_new_from_data);
 
   SecAsn1CoderRelease(coder);
 
@@ -535,53 +587,7 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
 }
 
 static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef privateKey) {
-  CSSM_KEY const *keyRef;
-  OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
-  if (error != errSecSuccess) {
-    return NULL;
-  }
-
-  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_REFERENCE) {
-    CSSM_CSP_HANDLE csp;
-    error = SecKeyGetCSPHandle(privateKey, &csp);
-    if (error != errSecSuccess) {
-      return NULL;
-    }
-
-    CSSM_KEY rawKey = {};
-    CSSM_ACCESS_CREDENTIALS credentials = {};
-
-    CSSM_CC_HANDLE context;
-    CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
-    if (cssmError != CSSM_OK) {
-      return NULL;
-    }
-
-    CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
-      .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
-      .AttributeLength = sizeof(uint32),
-      .Attribute.Uint32 = CSSM_KEYBLOB_RAW_FORMAT_PKCS1,
-    };
-    cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
-    if (cssmError != CSSM_OK) {
-      CSSM_DeleteContext(context);
-      return NULL;
-    }
-
-    cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
-    if (cssmError != CSSM_OK) {
-      CSSM_DeleteContext(context);
-      return NULL;
-    }
-
-    SecKeyRef publicKey = convert_rsa_private_key(&rawKey);
-
-    CSSM_DeleteContext(context);
-
-    return publicKey;
-  }
-
-  return convert_rsa_private_key(keyRef);
+  return convert_private_key_to_public_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, &convert_rsa_private_key);
 }
 
 #pragma clang diagnostic pop
@@ -639,11 +645,72 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION *session,
   return _libssh2_key_sign_hash(session, rsa, hash, hash_len, signature, signature_len);
 }
 
+#pragma mark - OpenSSL DSA
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+typedef struct {
+  CSSM_DATA	version;
+  CSSM_DATA	p;
+  CSSM_DATA	q;
+  CSSM_DATA	g;
+  CSSM_DATA	pub;
+  CSSM_DATA	priv;
+} _libssh2_openssl_dsa_private_key;
+
+static SecAsn1Template const _libssh2_openssl_dsa_private_key_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_openssl_dsa_private_key) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, version) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, p) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, q) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, g) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, pub) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, priv) },
+  { },
+};
+
+typedef struct {
+  SecAsn1Oid oid;
+  CSSM_DATA p;
+  CSSM_DATA q;
+  CSSM_DATA g;
+  CSSM_DATA pub;
+} _libssh2_openssl_dsa_public_key;
+
+static SecAsn1Template const _libssh2_openssl_dsa_public_key_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_openssl_dsa_public_key) },
+  { .kind = SEC_ASN1_OBJECT_ID, .offset = offsetof(_libssh2_openssl_dsa_public_key, oid) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, p) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, q) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, g) },
+  { .kind = SEC_ASN1_BIT_STRING, .offset = offsetof(_libssh2_openssl_dsa_public_key, pub), },
+  { },
+};
+
+typedef struct {
+  CSSM_DATA r;
+  CSSM_DATA s;
+} _libssh2_dsa_signature;
+
+static SecAsn1Template const _libssh2_dsa_signature_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_dsa_signature) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, r) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, s) },
+  { },
+};
+
+#pragma clang diagnostic pop
+
 #pragma mark - DSA
 
 int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
   CFRelease(dsa);
   return 0;
+}
+
+static int _libssh2_dsa_new_from_data(libssh2_dsa_ctx **dsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
+  return _libssh2_rsa_new_from_data(dsa, keyData, type, filename, passphrase);
 }
 
 /*
@@ -654,7 +721,7 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
  
     Returns 0 if the key is created, 1 otherwise.
  */
-int _libssh2_dsa_new(libssh2_dsa_ctx ** dsa,
+int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
                      const unsigned char *pdata,
                      unsigned long plen,
                      const unsigned char *qdata,
@@ -664,8 +731,43 @@ int _libssh2_dsa_new(libssh2_dsa_ctx ** dsa,
                      const unsigned char *ydata,
                      unsigned long ylen,
                      const unsigned char *x,
-                     unsigned long x_len) {
-  return 0;
+                     unsigned long xlen) {
+  assert(dsa != NULL);
+  assert(pdata != NULL);
+  assert(qdata != NULL);
+  assert(gdata != NULL);
+  assert(ydata != NULL);
+  assert(x != NULL);
+
+  uint8_t version = 1;
+
+  _libssh2_openssl_dsa_private_key keyData = {
+    .version = {
+      .Data = &version,
+      .Length = sizeof(version),
+    },
+    .p = {
+      .Data = (uint8_t *)pdata,
+      .Length = plen,
+    },
+    .q = {
+      .Data = (uint8_t *)qdata,
+      .Length = qlen,
+    },
+    .g = {
+      .Data = (uint8_t *)gdata,
+      .Length = glen,
+    },
+    .pub = {
+      .Data = (uint8_t *)ydata,
+      .Length = ylen,
+    },
+    .priv = {
+      .Data = (uint8_t *)x,
+      .Length = xlen,
+    },
+  };
+  return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template, &_libssh2_dsa_new_from_data);
 }
 
 /*
@@ -700,22 +802,72 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
     return 1;
   }
 
-  int error = _libssh2_rsa_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
+  int error = _libssh2_dsa_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 
   CFRelease(keyData);
 
   return error;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
+  if (keyRef->KeyHeader.AlgorithmId != CSSM_ALGID_DSA) return NULL;
+  if (keyRef->KeyHeader.Format != CSSM_KEYBLOB_RAW_FORMAT_OPENSSL) return NULL;
+  if (keyRef->KeyHeader.KeyClass != CSSM_KEYCLASS_PRIVATE_KEY) return NULL;
+
+  SecAsn1CoderRef coder;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != errSecSuccess) {
+    return NULL;
+  }
+
+  _libssh2_openssl_dsa_private_key privateKeyData;
+  error = SecAsn1Decode(coder, keyRef->KeyData.Data, keyRef->KeyData.Length, _libssh2_openssl_dsa_private_key_template, &privateKeyData);
+  if (error != errSecSuccess) {
+    SecAsn1CoderRelease(coder);
+    return NULL;
+  }
+
+  _libssh2_openssl_dsa_public_key publicKeyData = {
+    .oid = CSSMOID_DSA_CMS,
+    .p = privateKeyData.p,
+    .q = privateKeyData.q,
+    .g = privateKeyData.g,
+  };
+
+  error = SecAsn1EncodeItem(coder, &privateKeyData.pub, kSecAsn1UnsignedIntegerTemplate, &publicKeyData.pub);
+  if (error != errSecSuccess) {
+    SecAsn1CoderRelease(coder);
+    return NULL;
+  }
+
+  SecKeyRef publicKey;
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_dsa_new_from_data);
+
+  SecAsn1CoderRelease(coder);
+
+  if (keyError != 0) {
+    return NULL;
+  }
+
+  return publicKey;
+}
+
+static SecKeyRef convert_dsa_private_key_to_public_key(libssh2_dsa_ctx *dsa) {
+  return convert_private_key_to_public_key(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, &convert_dsa_private_key);
+}
+
+#pragma clang diagnostic pop
+
 /*
     Verify a DSA signature with an DSA key.
 
     dsa     - Initialised DSA key, non NULL.
-    sig     - Binary data, non NULL.
+    sig     - Binary data, non NULL. Two 160 bit / 20 byte integers.
     m       - Binary message, non NULL.
     m_len   - Length of m, non zero.
-
-    `sig` must be of length `SHA_DIGEST_LENGTH`.
 
     Returns 0 if the signature is valid, 1 otherwise.
  */
@@ -732,24 +884,44 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
     return 1;
   }
 
-  bool verify = _libssh2_key_verify_hash(publicKey, sig, 40, m, m_len);
+  /*
+      Transform the two 160 bit integers back into an ASN.1 structure
+   */
 
+  SecAsn1CoderRef coder = NULL;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != noErr) {
+    return 1;
+  }
+
+  _libssh2_dsa_signature dsaSignature = {
+    .r = {
+      .Data = (uint8_t *)sig,
+      .Length = 20,
+    },
+    .s = {
+      .Data = (uint8_t *)sig + 20,
+      .Length = 20,
+    },
+  };
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  CSSM_DATA encodedSignature;
+#pragma clang diagnostic pop
+  error = SecAsn1EncodeItem(coder, &dsaSignature, _libssh2_dsa_signature_template, &encodedSignature);
+  if (error != noErr) {
+    SecAsn1CoderRelease(coder);
+    return 1;
+  }
+
+  bool verify = _libssh2_key_verify_hash(publicKey, encodedSignature.Data, encodedSignature.Length, m, m_len);
+
+  SecAsn1CoderRelease(coder);
   CFRelease(publicKey);
 
   return verify;
 }
-
-typedef struct {
-  CSSM_DATA r;
-  CSSM_DATA s;
-} _libssh2_dsa_signature;
-
-static SecAsn1Template const _libssh2_dsa_signature_template[] = {
-  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_dsa_signature) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, r) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_signature, s) },
-  { },
-};
 
 /*
     Sign a SHA1 hash with a DSA key.
