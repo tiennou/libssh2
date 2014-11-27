@@ -334,9 +334,7 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
       break;
     }
 
-    char const *pemPrefix = "-----BEGIN PRIVATE KEY-----\n";
-    char const *pemSuffix = "\n-----END PRIVATE KEY-----";
-    CFDataRef pemData = _libssh2_wrap_data_in_pem(keyData, pemPrefix, pemSuffix);
+    CFDataRef pemData = _libssh2_wrap_data_in_pem(keyData, "-----BEGIN PRIVATE KEY-----\n", "\n-----END PRIVATE KEY-----");
     if (pemData == NULL) {
       break;
     }
@@ -352,7 +350,7 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
 
   CFStringRef cfPath = (cfLocation ? CFURLGetString(cfLocation) : NULL);
 
-  OSStatus error = SecItemImport(keyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
+  OSStatus error = SecItemImport(newKeyData, cfPath, &format, &typeRef, 0, &parameters, NULL, &items);
 
   CFRelease(newKeyData);
   CFRelease(attributes);
@@ -735,9 +733,16 @@ static int _libssh2_dsa_new_public_from_data(libssh2_dsa_ctx **dsa, CFDataRef ke
       Wrap the key in PEM then call the normal from_data function.
    */
 
+  CFDataRef pemData = _libssh2_wrap_data_in_pem(keyData, "-----BEGIN DSA PUBLIC KEY-----\n", "\n-----END DSA PUBLIC KEY-----");
+  if (pemData == NULL) {
+    return 1;
+  }
 
+  int error = _libssh2_key_new_from_data(dsa, pemData, kSecItemTypePublicKey, NULL, NULL);
 
-  return _libssh2_key_new_from_data(dsa, , <#SecExternalItemType type#>, <#const char *filename#>, <#const char *passphrase#>);
+  CFRelease(pemData);
+
+  return error;
 }
 
 /*
