@@ -895,6 +895,8 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
     return NULL;
   }
 
+  publicKeyData.pub.Length *= 8;
+
   SecKeyRef publicKey;
   int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_dsa_new_public_from_data);
 
