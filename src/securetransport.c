@@ -235,7 +235,7 @@ static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
     return 1;
   }
 
-  CSSM_DATA keyData = {};
+  CSSM_DATA keyData;
   error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
   if (error != noErr) {
     SecAsn1CoderRelease(coder);
