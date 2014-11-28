@@ -821,8 +821,8 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
 
     Returns 0 if the key is created, 1 otherwise.
  */
-int _libssh2_dsa_new_private(libssh2_dsa_ctx ** dsa,
-                             LIBSSH2_SESSION * session,
+int _libssh2_dsa_new_private(libssh2_dsa_ctx **dsa,
+                             LIBSSH2_SESSION *session,
                              const char *filename,
                              unsigned const char *passphrase) {
   assert(dsa != NULL);
