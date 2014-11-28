@@ -636,7 +636,7 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
 
   CFRelease(publicKey);
 
-  return verify;
+  return verify ? 0 : 1;
 }
 
 /*
@@ -974,7 +974,7 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
   SecAsn1CoderRelease(coder);
   CFRelease(publicKey);
 
-  return verify;
+  return verify ? 0 : 1;
 }
 
 /*
