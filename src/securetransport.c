@@ -742,27 +742,6 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
   return 0;
 }
 
-static int _libssh2_dsa_new_public_from_data(libssh2_dsa_ctx **dsa, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
-  /*
-      The only code path through `SecItemImport` whereby we get the
-      (kSecItemTypePublicKey, kSecFormatOpenSSL, CSSM_ALGID_DSA) tuple is
-   		through PEM decoding.
-
-      Wrap the key in PEM then call the normal from_data function.
-   */
-
-  CFDataRef pemData = _libssh2_wrap_data_in_pem(keyData, "-----BEGIN DSA PUBLIC KEY-----\n", "\n-----END DSA PUBLIC KEY-----");
-  if (pemData == NULL) {
-    return 1;
-  }
-
-  int error = _libssh2_key_new_from_data(dsa, pemData, kSecItemTypePublicKey, NULL, NULL);
-
-  CFRelease(pemData);
-
-  return error;
-}
-
 /*
     Create a DSA private key from the raw numeric components.
   
@@ -898,7 +877,7 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
   publicKeyData.pub.Length *= 8;
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_dsa_new_public_from_data);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_key_new_from_data);
 
   SecAsn1CoderRelease(coder);
 
