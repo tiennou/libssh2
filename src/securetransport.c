@@ -796,17 +796,19 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
       .Data = &version,
       .Length = sizeof(version),
     },
-    .p = {
-      .Data = (uint8_t *)pdata,
-      .Length = plen,
-    },
-    .q = {
-      .Data = (uint8_t *)qdata,
-      .Length = qlen,
-    },
-    .g = {
-      .Data = (uint8_t *)gdata,
-      .Length = glen,
+    .params = {
+      .p = {
+        .Data = (uint8_t *)pdata,
+        .Length = plen,
+      },
+      .q = {
+        .Data = (uint8_t *)qdata,
+        .Length = qlen,
+      },
+      .g = {
+        .Data = (uint8_t *)gdata,
+        .Length = glen,
+      },
     },
     .pub = {
       .Data = (uint8_t *)ydata,
@@ -881,10 +883,10 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
   }
 
   _libssh2_openssl_dsa_public_key publicKeyData = {
-    .oid = CSSMOID_DSA_CMS,
-    .p = privateKeyData.p,
-    .q = privateKeyData.q,
-    .g = privateKeyData.g,
+    .alg = {
+      .oid = CSSMOID_DSA_CMS,
+      .params = privateKeyData.params,
+    },
   };
 
   error = SecAsn1EncodeItem(coder, &privateKeyData.pub, kSecAsn1UnsignedIntegerTemplate, &publicKeyData.pub);
