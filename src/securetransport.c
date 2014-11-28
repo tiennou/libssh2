@@ -161,7 +161,7 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-static SecKeyRef convert_private_key_to_public_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT format, SecKeyRef (*convert)(CSSM_KEY const *)) {
+static SecKeyRef convert_private_key_to_public_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, SecKeyRef (*convert)(CSSM_KEY const *)) {
   CSSM_KEY const *keyRef;
   OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
   if (error != errSecSuccess) {
@@ -187,7 +187,7 @@ static SecKeyRef convert_private_key_to_public_key(SecKeyRef privateKey, CSSM_KE
     CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
       .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
       .AttributeLength = sizeof(uint32),
-      .Attribute.Uint32 = format,
+      .Attribute.Uint32 = privateFormat,
     };
     cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
     if (cssmError != CSSM_OK) {
