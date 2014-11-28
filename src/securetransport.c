@@ -924,6 +924,7 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
   SecAsn1CoderRef coder = NULL;
   OSStatus error = SecAsn1CoderCreate(&coder);
   if (error != noErr) {
+    CFRelease(publicKey);
     return 1;
   }
 
@@ -945,6 +946,7 @@ int _libssh2_dsa_sha1_verify(libssh2_dsa_ctx *dsa,
   error = SecAsn1EncodeItem(coder, &dsaSignature, _libssh2_dsa_signature_template, &encodedSignature);
   if (error != noErr) {
     SecAsn1CoderRelease(coder);
+    CFRelease(publicKey);
     return 1;
   }
 
