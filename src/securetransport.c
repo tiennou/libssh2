@@ -666,10 +666,14 @@ int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION *session,
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 typedef struct {
+  CSSM_DATA p;
+  CSSM_DATA q;
+  CSSM_DATA g;
+} _libssh2_dsa_params;
+
+typedef struct {
   CSSM_DATA	version;
-  CSSM_DATA	p;
-  CSSM_DATA	q;
-  CSSM_DATA	g;
+  _libssh2_dsa_params params;
   CSSM_DATA	pub;
   CSSM_DATA	priv;
 } _libssh2_openssl_dsa_private_key;
@@ -677,9 +681,9 @@ typedef struct {
 static SecAsn1Template const _libssh2_openssl_dsa_private_key_template[] = {
   { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_openssl_dsa_private_key) },
   { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, version) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, p) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, q) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, g) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, params) + offsetof(_libssh2_dsa_params, p) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, params) + offsetof(_libssh2_dsa_params, q) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, params) + offsetof(_libssh2_dsa_params, g) },
   { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, pub) },
   { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_private_key, priv) },
   { },
@@ -687,18 +691,32 @@ static SecAsn1Template const _libssh2_openssl_dsa_private_key_template[] = {
 
 typedef struct {
   SecAsn1Oid oid;
-  CSSM_DATA p;
-  CSSM_DATA q;
-  CSSM_DATA g;
+  _libssh2_dsa_params params;
+} _libssh2_dsa_alg;
+
+typedef struct {
+  _libssh2_dsa_alg alg;
   CSSM_DATA pub;
 } _libssh2_openssl_dsa_public_key;
 
+static SecAsn1Template _libssh2_dsa_params_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_dsa_params) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_params, p) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_params, q) },
+  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_dsa_params, g) },
+  { },
+};
+
+static SecAsn1Template const _libssh2_dsa_alg_template[] = {
+  { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_dsa_alg) },
+  { .kind = SEC_ASN1_OBJECT_ID, .offset = offsetof(_libssh2_dsa_alg, oid) },
+  { .kind = SEC_ASN1_INLINE, .offset = offsetof(_libssh2_dsa_alg, params), .sub = _libssh2_dsa_params_template },
+  { },
+};
+
 static SecAsn1Template const _libssh2_openssl_dsa_public_key_template[] = {
   { .kind = SEC_ASN1_SEQUENCE, .size = sizeof(_libssh2_openssl_dsa_public_key) },
-  { .kind = SEC_ASN1_OBJECT_ID, .offset = offsetof(_libssh2_openssl_dsa_public_key, oid) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, p) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, q) },
-  { .kind = SEC_ASN1_INTEGER, .offset = offsetof(_libssh2_openssl_dsa_public_key, g) },
+  { .kind = SEC_ASN1_INLINE, .offset = offsetof(_libssh2_openssl_dsa_public_key, alg), .sub = _libssh2_dsa_alg_template },
   { .kind = SEC_ASN1_BIT_STRING, .offset = offsetof(_libssh2_openssl_dsa_public_key, pub), },
   { },
 };
