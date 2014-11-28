@@ -532,7 +532,7 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
         Format  | Encrypted | Non-encrypted |
     
     PKCS#1 PEM        x             x
-    PKCS#1 DER        x             x
+    PKCS#1 DER                      x
     PKCS#8 PEM        x             x
     PKCS#8 DER        x             x
  
