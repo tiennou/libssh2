@@ -79,7 +79,8 @@ static int _libssh2_key_sign_hash(LIBSSH2_SESSION *session,
   }
 
   Boolean setAttributes = true;
-  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsPlainText, NULL);
+  setAttributes &= SecTransformSetAttribute(transform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
 
   CFDataRef inputData = CFDataCreate(kCFAllocatorDefault, hash, hash_len);
   setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, inputData, NULL);
@@ -135,7 +136,8 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
   }
 
   Boolean setAttributes = true;
-  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsPlainText, NULL);
+  setAttributes &= SecTransformSetAttribute(transform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
 
   CFDataRef message = CFDataCreate(kCFAllocatorDefault, m, m_len);
   setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, message, NULL);
