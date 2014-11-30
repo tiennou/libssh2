@@ -1142,7 +1142,8 @@ void _libssh2_init_aes_ctr(void) {
     if the server accepts will ask the client to sign data to prove it owns the
     corresponding private key.
 
-    session        - In parameter, non NULL.
+    session        - In parameter. May be NULL when testing, when non-NULL
+                     should be used for allocations.
     method         - Out parameter, must be set upon successful return, one of
                      "ssh-rsa" and "ssh-dss" based on whether the public key is
                      RSA or DSA.
