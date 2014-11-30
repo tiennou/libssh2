@@ -631,7 +631,12 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
 static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef privateKey) {
   __block SecKeyRef publicKey;
   convert_private_key_to_raw_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
-    publicKey = convert_rsa_private_key(keyRef);
+    if (keyRef->KeyHeader.AlgorithmId == CSSM_ALGID_RSA && keyRef->KeyHeader.KeyClass == CSSM_KEYCLASS_PUBLIC_KEY) {
+      publicKey = CFRetain(privateKey);
+    }
+    else {
+      publicKey = convert_rsa_private_key(keyRef);
+    }
   });
   return publicKey;
 }
@@ -935,10 +940,15 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
   return publicKey;
 }
 
-static SecKeyRef convert_dsa_private_key_to_public_key(libssh2_dsa_ctx *dsa) {
+static SecKeyRef convert_dsa_private_key_to_public_key(SecKeyRef privateKey) {
   __block SecKeyRef publicKey;
-  convert_private_key_to_raw_key(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
-    publicKey = convert_dsa_private_key(keyRef);
+  convert_private_key_to_raw_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+    if (keyRef->KeyHeader.AlgorithmId == CSSM_ALGID_DSA && keyRef->KeyHeader.KeyClass == CSSM_KEYCLASS_PUBLIC_KEY) {
+      publicKey = CFRetain(privateKey);
+    }
+    else {
+      publicKey = convert_dsa_private_key(keyRef);
+    }
   });
   return publicKey;
 }
