@@ -45,9 +45,7 @@ typedef struct OpaqueSecKeyRef libssh2_dsa_ctx;
 extern int _libssh2_rsa_free(libssh2_rsa_ctx *rsa);
 extern int _libssh2_dsa_free(libssh2_dsa_ctx *dsa);
 
-typedef struct {
-
-} _libssh2_cipher_ctx;
+#define _libssh2_cipher_ctx CCCryptorRef
 
 #define LIBSSH2_AES 1
 #define LIBSSH2_AES_CTR 1
@@ -56,22 +54,20 @@ typedef struct {
 #define LIBSSH2_CAST 1
 #define LIBSSH2_3DES 1
 
-#define _libssh2_cipher_type(name) void *name
+typedef enum {
+	_libssh2_cipher_aes256,
+	_libssh2_cipher_aes256ctr,
+	_libssh2_cipher_aes192,
+	_libssh2_cipher_aes192ctr,
+	_libssh2_cipher_aes128,
+	_libssh2_cipher_aes128ctr,
+	_libssh2_cipher_blowfish,
+	_libssh2_cipher_arcfour,
+	_libssh2_cipher_cast5,
+	_libssh2_cipher_3des,
+} _libssh2_securetransport_cipher;
 
-#define _libssh2_cipher_aes256
-#define _libssh2_cipher_aes192
-#define _libssh2_cipher_aes128
-
-#define _libssh2_cipher_aes128ctr
-#define _libssh2_cipher_aes192ctr
-#define _libssh2_cipher_aes256ctr
-
-#define _libssh2_cipher_blowfish
-#define _libssh2_cipher_arcfour
-#define _libssh2_cipher_cast5
-#define _libssh2_cipher_3des
-
-#define _libssh2_cipher_dtor(ctx)
+#define _libssh2_cipher_type(name) _libssh2_securetransport_cipher name
 
 typedef void *_libssh2_bn_ctx;
 #define _libssh2_bn_ctx_new() NULL

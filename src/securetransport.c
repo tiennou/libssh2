@@ -1018,24 +1018,104 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx * dsa,
 #pragma mark - Ciphers
 
 /*
-
+    Initialise an encryptor/decryptor cipher.
+  
+    ctx     - Out, non-NULL, upon successful initialisation this will be
+              populated with a cipher.
+    algo    - Cipher algorithm, specifies the type, key size and mode.
+    iv      - In parameter, The initialisation vector, is the length of the
+              selected cipher blocksize.
+    secret  - In parameter. The secret key, is the length of the selected cipher
+              key size.
+    encrypt - 1 if encryption is requested, 0 if decryption is requested.
+    
+    Returns 0 if the cipher is successfully initialised, 1 otherwise.
  */
-int _libssh2_cipher_init(_libssh2_cipher_ctx * h,
+int _libssh2_cipher_init(_libssh2_cipher_ctx *ctx,
                          _libssh2_cipher_type(algo),
                          unsigned char *iv,
                          unsigned char *secret,
                          int encrypt) {
-  assert(h != NULL);
+  assert(ctx != NULL);
   assert(iv != NULL);
   assert(secret != NULL);
+
+  CCAlgorithm alg;
+  CCMode mode = kCCModeCBC;
+  switch (algo) {
+    case _libssh2_cipher_aes256:
+    case _libssh2_cipher_aes192:
+    case _libssh2_cipher_aes128:
+      alg = kCCAlgorithmAES;
+      break;
+    case _libssh2_cipher_aes256ctr:
+    case _libssh2_cipher_aes192ctr:
+    case _libssh2_cipher_aes128ctr:
+      alg = kCCAlgorithmAES;
+      mode = kCCModeCTR;
+      break;
+    case _libssh2_cipher_blowfish:
+      alg = kCCAlgorithmBlowfish;
+      break;
+    case _libssh2_cipher_arcfour:
+      alg = kCCAlgorithmRC4;
+      break;
+    case _libssh2_cipher_cast5:
+      alg = kCCAlgorithmCAST;
+      break;
+    case _libssh2_cipher_3des:
+      alg = kCCAlgorithm3DES;
+      break;
+  }
+
+  size_t keyLength;
+  switch (algo) {
+    case _libssh2_cipher_aes256:
+    case _libssh2_cipher_aes256ctr:
+      keyLength = 32;
+      break;
+    case _libssh2_cipher_aes192:
+    case _libssh2_cipher_aes192ctr:
+      keyLength = 24;
+      break;
+    case _libssh2_cipher_aes128:
+    case _libssh2_cipher_aes128ctr:
+      keyLength = 16;
+      break;
+    case _libssh2_cipher_blowfish:
+      keyLength = 16;
+      break;
+    case _libssh2_cipher_arcfour:
+      keyLength = 16;
+      break;
+    case _libssh2_cipher_cast5:
+      keyLength = 16;
+      break;
+    case _libssh2_cipher_3des:
+      keyLength = 24;
+      break;
+  }
+
+  CCCryptorStatus error = CCCryptorCreateWithMode(encrypt == 1 ? kCCEncrypt : kCCDecrypt, mode, alg, ccNoPadding, iv, secret, keyLength, NULL, 0, 0, 0, ctx);
+  if (error != kCCSuccess) {
+    return 1;
+  }
 
   return 0;
 }
 
 /*
- 
+    Perform the cipher against the given data block.
+    
+    ctx       - In parameter. An initialise cipher.
+    algo      - Cipher algorithm, specifies the type, key size and mode.
+    encrypt   - 1 if encryption is requested, 0 if decryption is requested.
+    block     - In/out parameter. The data to encrypt/decrypt. The
+    blocksize - The length of block in bytes.
+    
+    Returns 0 if the block is successfuly encrypted/decrypted, 1 otherwise.
  */
-int _libssh2_cipher_crypt(_libssh2_cipher_ctx * ctx,
+int _libssh2_cipher_crypt(_libssh2_cipher_ctx *ctx,
                           _libssh2_cipher_type(algo),
                           int encrypt,
                           unsigned char *block,
@@ -1043,7 +1123,18 @@ int _libssh2_cipher_crypt(_libssh2_cipher_ctx * ctx,
   assert(ctx != NULL);
   assert(block != NULL);
 
+  size_t dataOut;
+  // inline encrypt/decrypt
+  CCCryptorStatus error = CCCryptorUpdate(*ctx, block, blocksize, block, blocksize, &dataOut);
+  if (error != kCCSuccess) {
+    return 1;
+  }
+
   return 0;
+}
+
+void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx) {
+  CCCryptorRelease(*ctx);
 }
 
 void _libssh2_init_aes_ctr(void) {
