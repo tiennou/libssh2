@@ -1195,8 +1195,11 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
     return error;
   }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
   CSSM_KEY const *cssmKey;
   OSStatus secErr = SecKeyGetCSSMKey(key, &cssmKey);
+#pragma clang diagnostic pop
   if (secErr != errSecSuccess) {
     CFRelease(key);
     return 1;
@@ -1212,7 +1215,10 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
   if (algorithm == CSSM_ALGID_RSA) {
     __block CFDataRef e = NULL, n = NULL;
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
+#pragma clang diagnostic pop
       SecAsn1CoderRef coder;
       OSStatus error = SecAsn1CoderCreate(&coder);
       if (error != errSecSuccess) {
@@ -1281,7 +1287,10 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
   if (algorithm == CSSM_ALGID_DSA) {
     __block CFDataRef p = NULL, q = NULL, g = NULL, pub = NULL;
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+#pragma clang diagnostic pop
       SecAsn1CoderRef coder;
       OSStatus error = SecAsn1CoderCreate(&coder);
       if (error != errSecSuccess) {
