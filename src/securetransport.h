@@ -46,6 +46,7 @@ extern int _libssh2_rsa_free(libssh2_rsa_ctx *rsa);
 extern int _libssh2_dsa_free(libssh2_dsa_ctx *dsa);
 
 #define _libssh2_cipher_ctx CCCryptorRef
+extern void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx);
 
 #define LIBSSH2_AES 1
 #define LIBSSH2_AES_CTR 1
