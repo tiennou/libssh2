@@ -1202,9 +1202,15 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
     return 1;
   }
 
+  void (^appendBigEndianInteger)(CFDataRef, CFDataRef) = ^(CFDataRef pubData, CFDataRef data) {
+    uint32_t encodedLength = htonl((uint32_t)CFDataGetLength(data));
+    CFDataAppendBytes(pubData, (uint8_t *)&encodedLength, 4);
+    CFDataAppendBytes(pubData, CFDataGetBytePtr(data), CFDataGetLength(data));
+  };
+
   CSSM_ALGORITHMS algorithm = cssmKey->KeyHeader.AlgorithmId;
   if (algorithm == CSSM_ALGID_RSA) {
-    __block CFDataRef eData = NULL, nData = NULL;
+    __block CFDataRef e = NULL, n = NULL;
 
     convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
       SecAsn1CoderRef coder;
@@ -1220,15 +1226,15 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
         return;
       }
 
-      eData = CreateDataFromAsn1Item(&privateKeyData.publicExponent);
-      nData = CreateDataFromAsn1Item(&privateKeyData.modulus);
+      e = CreateDataFromAsn1Item(&privateKeyData.publicExponent);
+      n = CreateDataFromAsn1Item(&privateKeyData.modulus);
 
       SecAsn1CoderRelease(coder);
     });
 
-    if (eData == NULL || nData == NULL) {
-      if (eData != NULL) CFRelease(eData);
-      if (nData != NULL) CFRelease(nData);
+    if (e == NULL || n == NULL) {
+      if (e != NULL) CFRelease(e);
+      if (n != NULL) CFRelease(n);
       CFRelease(key);
       return 1;
     }
@@ -1255,13 +1261,8 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
     CFDataAppendBytes(pubData, (uint8_t *)&encodedMethodLength, 4);
     CFDataAppendBytes(pubData, (uint8_t *)method, methodLength);
 
-    void (^appendBigEndianInteger)(CFDataRef) = ^(CFDataRef data) {
-      uint32_t encodedLength = htonl((uint32_t)CFDataGetLength(data));
-      CFDataAppendBytes(pubData, (uint8_t *)&encodedLength, 4);
-      CFDataAppendBytes(pubData, CFDataGetBytePtr(data), CFDataGetLength(data));
-    };
-    appendBigEndianInteger(eData);
-    appendBigEndianInteger(nData);
+    appendBigEndianInteger(pubData, e);
+    appendBigEndianInteger(pubData, n);
 
     *pubkeydata_len_ref = CFDataGetLength(pubData);
     *pubkeydata_ref = session ? LIBSSH2_ALLOC(session, *pubkeydata_len_ref) : malloc(*pubkeydata_len_ref);
@@ -1269,8 +1270,89 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
 
     CFRelease(pubData);
 
-    CFRelease(eData);
-    CFRelease(nData);
+    CFRelease(e);
+    CFRelease(n);
+
+    CFRelease(key);
+
+    return 0;
+  }
+
+  if (algorithm == CSSM_ALGID_DSA) {
+    __block CFDataRef p = NULL, q = NULL, g = NULL, pub = NULL;
+
+    convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+      SecAsn1CoderRef coder;
+      OSStatus error = SecAsn1CoderCreate(&coder);
+      if (error != errSecSuccess) {
+        return;
+      }
+
+      _libssh2_openssl_dsa_private_key privateKeyData;
+      error = SecAsn1Decode(coder, keyRef->KeyData.Data, keyRef->KeyData.Length, _libssh2_openssl_dsa_private_key_template, &privateKeyData);
+      if (error != errSecSuccess) {
+        SecAsn1CoderRelease(coder);
+        return;
+      }
+
+      p = CreateDataFromAsn1Item(&privateKeyData.params.p);
+      q = CreateDataFromAsn1Item(&privateKeyData.params.q);
+      g = CreateDataFromAsn1Item(&privateKeyData.params.g);
+      pub = CreateDataFromAsn1Item(&privateKeyData.pub);
+
+      SecAsn1CoderRelease(coder);
+    });
+
+    if (p == NULL || q == NULL || g == NULL || pub == NULL) {
+      if (p != NULL) CFRelease(p);
+      if (q != NULL) CFRelease(q);
+      if (g != NULL) CFRelease(g);
+      if (pub != NULL) CFRelease(pub);
+      CFRelease(key);
+      return 1;
+    }
+
+    char const *method = "ssh-dss";
+    size_t methodLength = strlen(method);
+
+    *method_ref = session ? LIBSSH2_ALLOC(session, methodLength) : malloc(methodLength);
+    *method_len_ref = methodLength;
+    memcpy(*method_ref, method, methodLength);
+
+    /*
+        method length (4 bytes, network byte order)
+        method (x bytes)
+        p length (4 bytes, network byte order)
+        p (x bytes)
+        q length (4 bytes, network byte order)
+        q (x bytes)
+        g length (4 bytes, network byte order)
+        g (x bytes)
+        pub length (4 bytes, network byte order)
+        pub (x bytes)
+     */
+
+    CFMutableDataRef pubData = CFDataCreateMutable(kCFAllocatorDefault, 0);
+
+    uint32_t encodedMethodLength = htonl(methodLength);
+    CFDataAppendBytes(pubData, (uint8_t *)&encodedMethodLength, 4);
+    CFDataAppendBytes(pubData, (uint8_t *)method, methodLength);
+
+    appendBigEndianInteger(pubData, p);
+    appendBigEndianInteger(pubData, q);
+    appendBigEndianInteger(pubData, g);
+    appendBigEndianInteger(pubData, pub);
+
+    *pubkeydata_len_ref = CFDataGetLength(pubData);
+    *pubkeydata_ref = session ? LIBSSH2_ALLOC(session, *pubkeydata_len_ref) : malloc(*pubkeydata_len_ref);
+    CFDataGetBytes(pubData, CFRangeMake(0, *pubkeydata_len_ref), *pubkeydata_ref);
+
+    CFRelease(pubData);
+
+    CFRelease(p);
+    CFRelease(q);
+    CFRelease(g);
+    CFRelease(pub);
 
     CFRelease(key);
 
@@ -1279,11 +1361,4 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
 
   CFRelease(key);
   return 1;
-
-  if (algorithm == CSSM_ALGID_DSA) {
-    //convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
-    //
-    //});
-    return 1;
-  }
 }
