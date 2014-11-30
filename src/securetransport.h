@@ -81,6 +81,7 @@ do {\
   if (bn != NULL) CCBigNumFree(bn);\
   bn = CCBigNumCreateRandom(NULL, bits, top, bottom);\
 } while (0)
+
 #define _libssh2_bn_mod_exp(r, a, power, modulus, ctx) CCBigNumModExp(r, a, power, modulus)
 
 #define _libssh2_bn_set_word(bn, val) \
@@ -89,7 +90,11 @@ CCBigNumClear(bn);\
 CCBigNumAddI(bn, bn, val);\
 } while (0)
 
-#define _libssh2_bn_from_bin(bn, len, val) CCBigNumFromData(NULL, val, len)
+#define _libssh2_bn_from_bin(bn, len, val)\
+do {\
+	if (bn != NULL) CCBigNumFree(bn);\
+	bn = CCBigNumFromData(NULL, val, len);\
+} while(0)
 #define _libssh2_bn_to_bin(bn, val) CCBigNumToData(NULL, bn, val)
 
 #define _libssh2_bn_bytes(bn) CCBigNumByteCount(bn)
