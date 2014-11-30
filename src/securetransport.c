@@ -814,8 +814,8 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
 
     PKCS#1 PEM        x             x
     PKCS#1 DER                      x
-    PKCS#8 PEM        x             x
-    PKCS#8 DER        x             x
+    PKCS#8 PEM        x
+    PKCS#8 DER        x              
 
     dsa        - Out parameter, should be populated on successful return.
     session    - In parameter, non NULL when invoked from libssh2.
