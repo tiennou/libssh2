@@ -162,106 +162,6 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
   return (output == kCFBooleanTrue);
 }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-
-static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, void (^convert)(CSSM_KEY const *)) {
-  CSSM_KEY const *keyRef;
-  OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
-  if (error != errSecSuccess) {
-    return;
-  }
-
-  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_RAW) {
-    convert(keyRef);
-    return;
-  }
-
-  if (keyRef->KeyHeader.BlobType != CSSM_KEYBLOB_REFERENCE) {
-    return;
-  }
-  
-  CSSM_CSP_HANDLE csp;
-  error = SecKeyGetCSPHandle(privateKey, &csp);
-  if (error != errSecSuccess) {
-    return;
-  }
-
-  CSSM_KEY rawKey = {};
-  CSSM_ACCESS_CREDENTIALS credentials = {};
-
-  CSSM_CC_HANDLE context;
-  CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
-  if (cssmError != CSSM_OK) {
-    return;
-  }
-
-  CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
-    .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
-    .AttributeLength = sizeof(uint32),
-    .Attribute.Uint32 = privateFormat,
-  };
-  cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
-  if (cssmError != CSSM_OK) {
-    CSSM_DeleteContext(context);
-    return;
-  }
-
-  cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
-  if (cssmError != CSSM_OK) {
-    CSSM_DeleteContext(context);
-    return;
-  }
-
-  convert(&rawKey);
-
-  CSSM_DeleteContext(context);
-}
-
-static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
-                                             CSSM_KEYBLOB_FORMAT format,
-                                             CSSM_KEYCLASS keyClass,
-                                             void const *bytes,
-                                             SecAsn1Template const *templates,
-                                             int (*create)(SecKeyRef *, CFDataRef, SecExternalItemType, char const *, char const *)) {
-  SecExternalItemType type;
-  switch (keyClass) {
-    case CSSM_KEYCLASS_PRIVATE_KEY:
-      type = kSecItemTypePrivateKey;
-      break;
-    case CSSM_KEYCLASS_PUBLIC_KEY:
-      type = kSecItemTypePublicKey;
-      break;
-    default:
-      return 1;
-  }
-
-  SecAsn1CoderRef coder = NULL;
-  OSStatus error = SecAsn1CoderCreate(&coder);
-  if (error != noErr) {
-    return 1;
-  }
-
-  CSSM_DATA keyData;
-  error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
-  if (error != noErr) {
-    SecAsn1CoderRelease(coder);
-    return 1;
-  }
-
-  CFDataRef cfKeyData = CFDataCreate(kCFAllocatorDefault, keyData.Data, keyData.Length);
-
-  SecAsn1CoderRelease(coder);
-
-  int keyError = create(keyRef, cfKeyData, type, NULL, NULL);
-
-  CFRelease(cfKeyData);
-
-  return keyError;
-}
-
-#pragma clang diagnostic pop
-
 static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, char const *footer) {
   SecTransformRef encodeTransform = SecEncodeTransformCreate(kSecBase64Encoding, NULL);
   if (encodeTransform == NULL) {
@@ -392,6 +292,105 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
   return 0;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, void (^convert)(CSSM_KEY const *)) {
+  CSSM_KEY const *keyRef;
+  OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
+  if (error != errSecSuccess) {
+    return;
+  }
+
+  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_RAW) {
+    convert(keyRef);
+    return;
+  }
+
+  if (keyRef->KeyHeader.BlobType != CSSM_KEYBLOB_REFERENCE) {
+    return;
+  }
+  
+  CSSM_CSP_HANDLE csp;
+  error = SecKeyGetCSPHandle(privateKey, &csp);
+  if (error != errSecSuccess) {
+    return;
+  }
+
+  CSSM_KEY rawKey = {};
+  CSSM_ACCESS_CREDENTIALS credentials = {};
+
+  CSSM_CC_HANDLE context;
+  CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
+  if (cssmError != CSSM_OK) {
+    return;
+  }
+
+  CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
+    .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
+    .AttributeLength = sizeof(uint32),
+    .Attribute.Uint32 = privateFormat,
+  };
+  cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
+  if (cssmError != CSSM_OK) {
+    CSSM_DeleteContext(context);
+    return;
+  }
+
+  cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
+  if (cssmError != CSSM_OK) {
+    CSSM_DeleteContext(context);
+    return;
+  }
+
+  convert(&rawKey);
+
+  CSSM_DeleteContext(context);
+}
+
+static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
+                                             CSSM_KEYBLOB_FORMAT format,
+                                             CSSM_KEYCLASS keyClass,
+                                             void const *bytes,
+                                             SecAsn1Template const *templates) {
+  SecExternalItemType type;
+  switch (keyClass) {
+    case CSSM_KEYCLASS_PRIVATE_KEY:
+      type = kSecItemTypePrivateKey;
+      break;
+    case CSSM_KEYCLASS_PUBLIC_KEY:
+      type = kSecItemTypePublicKey;
+      break;
+    default:
+      return 1;
+  }
+
+  SecAsn1CoderRef coder = NULL;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != noErr) {
+    return 1;
+  }
+
+  CSSM_DATA keyData;
+  error = SecAsn1EncodeItem(coder, bytes, templates, &keyData);
+  if (error != noErr) {
+    SecAsn1CoderRelease(coder);
+    return 1;
+  }
+
+  CFDataRef cfKeyData = CFDataCreate(kCFAllocatorDefault, keyData.Data, keyData.Length);
+
+  SecAsn1CoderRelease(coder);
+
+  int keyError = _libssh2_key_new_from_data(keyRef, cfKeyData, type, NULL, NULL);
+
+  CFRelease(cfKeyData);
+
+  return keyError;
+}
+
+#pragma clang diagnostic pop
+
 static int _libssh2_key_new_from_path(SecKeyRef *keyRef, SecExternalItemType type, char const *filename, char const *passphrase) {
   assert(keyRef != NULL);
   assert(filename != NULL);
@@ -470,13 +469,15 @@ int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
 /*
     Create an RSA private key from the raw numeric components.
 
+    Can be invoked with only edata and ndata to create a public key.
+
     rsa                          - Out parameter, should be populated on
                                    successful return.
     e, n, d, p, q, e1, e2, coeff - Positive integer in big-endian form.
 
     Returns 0 if the key is created, 1 otherwise.
 */
-int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
+int _libssh2_rsa_new(libssh2_rsa_ctx **rsa,
                      const unsigned char *edata,
                      unsigned long elen,
                      const unsigned char *ndata,
@@ -496,55 +497,70 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
   assert(rsa != NULL);
   assert(edata != NULL);
   assert(ndata != NULL);
-  assert(ddata != NULL);
-  assert(pdata != NULL);
-  assert(qdata != NULL);
-  assert(e1data != NULL);
-  assert(e2data != NULL);
-  assert(e2data != NULL);
-  assert(coeffdata != NULL);
 
-  uint8_t version = RSA_Version_TwoPrime;
+  if (ddata != NULL) {
+    assert(ddata != NULL);
+    assert(pdata != NULL);
+    assert(qdata != NULL);
+    assert(e1data != NULL);
+    assert(e2data != NULL);
+    assert(e2data != NULL);
+    assert(coeffdata != NULL);
 
-  _libssh2_pkcs1_rsa_private_key keyData = {
-    .version = {
-      .Length = sizeof(version),
-      .Data = &version,
-    },
+    uint8_t version = RSA_Version_TwoPrime;
+
+    _libssh2_pkcs1_rsa_private_key keyData = {
+      .version = {
+        .Length = sizeof(version),
+        .Data = &version,
+      },
+      .modulus = {
+        .Length = nlen,
+        .Data = (uint8_t *)ndata,
+      },
+      .publicExponent = {
+        .Length = elen,
+        .Data = (uint8_t *)edata,
+      },
+      .privateExponent = {
+        .Length = dlen,
+        .Data = (uint8_t *)ddata,
+      },
+      .prime1 = {
+        .Length = plen,
+        .Data = (uint8_t *)pdata,
+      },
+      .prime2 = {
+        .Length = qlen,
+        .Data = (uint8_t *)qdata,
+      },
+      .exponent1 = {
+        .Length = e1len,
+        .Data = (uint8_t *)e1data,
+      },
+      .exponent2 = {
+        .Length = e2len,
+        .Data = (uint8_t *)e2data,
+      },
+      .coefficient = {
+        .Length = coefflen,
+        .Data = (uint8_t *)coeffdata,
+      },
+    };
+    return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template);
+  }
+
+  _libssh2_pkcs1_rsa_public_key keyData = {
     .modulus = {
       .Length = nlen,
-      .Data = (uint8_t *)ndata,
+      .Data = ndata,
     },
     .publicExponent = {
       .Length = elen,
-      .Data = (uint8_t *)edata,
-    },
-    .privateExponent = {
-      .Length = dlen,
-      .Data = (uint8_t *)ddata,
-    },
-    .prime1 = {
-      .Length = plen,
-      .Data = (uint8_t *)pdata,
-    },
-    .prime2 = {
-      .Length = qlen,
-      .Data = (uint8_t *)qdata,
-    },
-    .exponent1 = {
-      .Length = e1len,
-      .Data = (uint8_t *)e1data,
-    },
-    .exponent2 = {
-      .Length = e2len,
-      .Data = (uint8_t *)e2data,
-    },
-    .coefficient = {
-      .Length = coefflen,
-      .Data = (uint8_t *)coeffdata,
+      .Data = edata,
     },
   };
-  return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template, &_libssh2_key_new_from_data);
+  return _libssh2_new_from_binary_template(rsa, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &keyData, _libssh2_pkcs1_rsa_public_key_template);
 }
 
 /*
@@ -601,7 +617,7 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
   };
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template, &_libssh2_key_new_from_data);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template);
 
   SecAsn1CoderRelease(coder);
 
@@ -759,6 +775,8 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
 
 /*
     Create a DSA private key from the raw numeric components.
+
+    Can be invoked without x to create a public key.
   
     dsa           - Out parameter, should be populated on successful return.
     p, q, g, y, x - Positive integer in big-endian form.
@@ -781,39 +799,65 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
   assert(qdata != NULL);
   assert(gdata != NULL);
   assert(ydata != NULL);
-  assert(x != NULL);
 
-  uint8_t version = 1;
+  if (x != NULL) {
+    uint8_t version = 1;
 
-  _libssh2_openssl_dsa_private_key keyData = {
-    .version = {
-      .Data = &version,
-      .Length = sizeof(version),
-    },
-    .params = {
-      .p = {
-        .Data = (uint8_t *)pdata,
-        .Length = plen,
+    _libssh2_openssl_dsa_private_key keyData = {
+      .version = {
+        .Data = &version,
+        .Length = sizeof(version),
       },
-      .q = {
-        .Data = (uint8_t *)qdata,
-        .Length = qlen,
+      .params = {
+        .p = {
+          .Data = (uint8_t *)pdata,
+          .Length = plen,
+        },
+        .q = {
+          .Data = (uint8_t *)qdata,
+          .Length = qlen,
+        },
+        .g = {
+          .Data = (uint8_t *)gdata,
+          .Length = glen,
+        },
       },
-      .g = {
-        .Data = (uint8_t *)gdata,
-        .Length = glen,
+      .pub = {
+        .Data = (uint8_t *)ydata,
+        .Length = ylen,
+      },
+      .priv = {
+        .Data = (uint8_t *)x,
+        .Length = xlen,
+      },
+    };
+    return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template);
+  }
+
+  _libssh2_openssl_dsa_public_key keyData = {
+    .alg = {
+      .oid = CSSMOID_DSA_CMS,
+      .params = {
+        .p = {
+          .Data = (uint8_t *)pdata,
+          .Length = plen,
+        },
+        .q = {
+          .Data = (uint8_t *)qdata,
+          .Length = qlen,
+        },
+        .g = {
+          .Data = (uint8_t *)gdata,
+          .Length = glen,
+        },
       },
     },
     .pub = {
       .Data = (uint8_t *)ydata,
       .Length = ylen,
     },
-    .priv = {
-      .Data = (uint8_t *)x,
-      .Length = xlen,
-    },
   };
-  return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template, &_libssh2_key_new_from_data);
+  return _libssh2_new_from_binary_template(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, CSSM_KEYCLASS_PUBLIC_KEY, &keyData, _libssh2_openssl_dsa_public_key_template);
 }
 
 /*
@@ -880,7 +924,7 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
   publicKeyData.pub.Length *= 8;
 
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template, &_libssh2_key_new_from_data);
+  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYBLOB_RAW_FORMAT_X509, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template);
 
   SecAsn1CoderRelease(coder);
 
