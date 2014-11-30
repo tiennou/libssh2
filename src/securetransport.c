@@ -1202,7 +1202,7 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
     return 1;
   }
 
-  void (^appendBigEndianInteger)(CFDataRef, CFDataRef) = ^(CFDataRef pubData, CFDataRef data) {
+  void (^appendBigEndianInteger)(CFMutableDataRef, CFDataRef) = ^(CFMutableDataRef pubData, CFDataRef data) {
     uint32_t encodedLength = htonl((uint32_t)CFDataGetLength(data));
     CFDataAppendBytes(pubData, (uint8_t *)&encodedLength, 4);
     CFDataAppendBytes(pubData, CFDataGetBytePtr(data), CFDataGetLength(data));
