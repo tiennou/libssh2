@@ -49,7 +49,7 @@ extern int _libssh2_dsa_free(libssh2_dsa_ctx *dsa);
 extern void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx);
 
 #define LIBSSH2_AES 1
-#define LIBSSH2_AES_CTR 1
+#define LIBSSH2_AES_CTR 0
 #define LIBSSH2_BLOWFISH 1
 #define LIBSSH2_RC4 1
 #define LIBSSH2_CAST 1
