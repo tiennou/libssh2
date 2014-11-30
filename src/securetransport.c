@@ -46,6 +46,10 @@ static CFDataRef CreateDataFromFile(char const *path) {
   return (CFDataRef)keyData;
 }
 
+static CFDataRef CreateDataFromAsn1Item(SecAsn1Item *itemRef) {
+  return CFDataCreate(kCFAllocatorDefault, itemRef->Data, itemRef->Length);
+}
+
 /*
     Sign a hash with a private key.
 
@@ -161,54 +165,57 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
-static SecKeyRef convert_private_key_to_public_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, SecKeyRef (*convert)(CSSM_KEY const *)) {
+static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, void (^convert)(CSSM_KEY const *)) {
   CSSM_KEY const *keyRef;
   OSStatus error = SecKeyGetCSSMKey(privateKey, &keyRef);
   if (error != errSecSuccess) {
-    return NULL;
+    return;
   }
 
-  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_REFERENCE) {
-    CSSM_CSP_HANDLE csp;
-    error = SecKeyGetCSPHandle(privateKey, &csp);
-    if (error != errSecSuccess) {
-      return NULL;
-    }
+  if (keyRef->KeyHeader.BlobType == CSSM_KEYBLOB_RAW) {
+    convert(keyRef);
+    return;
+  }
 
-    CSSM_KEY rawKey = {};
-    CSSM_ACCESS_CREDENTIALS credentials = {};
+  if (keyRef->KeyHeader.BlobType != CSSM_KEYBLOB_REFERENCE) {
+    return;
+  }
+  
+  CSSM_CSP_HANDLE csp;
+  error = SecKeyGetCSPHandle(privateKey, &csp);
+  if (error != errSecSuccess) {
+    return;
+  }
 
-    CSSM_CC_HANDLE context;
-    CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
-    if (cssmError != CSSM_OK) {
-      return NULL;
-    }
+  CSSM_KEY rawKey = {};
+  CSSM_ACCESS_CREDENTIALS credentials = {};
 
-    CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
-      .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
-      .AttributeLength = sizeof(uint32),
-      .Attribute.Uint32 = privateFormat,
-    };
-    cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
-    if (cssmError != CSSM_OK) {
-      CSSM_DeleteContext(context);
-      return NULL;
-    }
+  CSSM_CC_HANDLE context;
+  CSSM_RETURN cssmError = CSSM_CSP_CreateSymmetricContext(csp, CSSM_ALGID_NONE, CSSM_ALGMODE_NONE, &credentials, NULL, NULL, CSSM_PADDING_NONE, 0, &context);
+  if (cssmError != CSSM_OK) {
+    return;
+  }
 
-    cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
-    if (cssmError != CSSM_OK) {
-      CSSM_DeleteContext(context);
-      return NULL;
-    }
-
-    SecKeyRef publicKey = convert(&rawKey);
-
+  CSSM_CONTEXT_ATTRIBUTE wrapFormat = {
+    .AttributeType = CSSM_ATTRIBUTE_PRIVATE_KEY_FORMAT,
+    .AttributeLength = sizeof(uint32),
+    .Attribute.Uint32 = privateFormat,
+  };
+  cssmError = CSSM_UpdateContextAttributes(context, 1, &wrapFormat);
+  if (cssmError != CSSM_OK) {
     CSSM_DeleteContext(context);
-
-    return publicKey;
+    return;
   }
 
-  return convert(keyRef);
+  cssmError = CSSM_WrapKey(context, &credentials, keyRef, NULL, &rawKey);
+  if (cssmError != CSSM_OK) {
+    CSSM_DeleteContext(context);
+    return;
+  }
+
+  convert(&rawKey);
+
+  CSSM_DeleteContext(context);
 }
 
 static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
@@ -606,7 +613,11 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
 }
 
 static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef privateKey) {
-  return convert_private_key_to_public_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, &convert_rsa_private_key);
+  __block SecKeyRef publicKey;
+  convert_private_key_to_raw_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
+    publicKey = convert_rsa_private_key(keyRef);
+  });
+  return publicKey;
 }
 
 #pragma clang diagnostic pop
@@ -815,7 +826,7 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
     PKCS#1 PEM        x             x
     PKCS#1 DER                      x
     PKCS#8 PEM        x
-    PKCS#8 DER        x              
+    PKCS#8 DER        x
 
     dsa        - Out parameter, should be populated on successful return.
     session    - In parameter, non NULL when invoked from libssh2.
@@ -881,7 +892,11 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
 }
 
 static SecKeyRef convert_dsa_private_key_to_public_key(libssh2_dsa_ctx *dsa) {
-  return convert_private_key_to_public_key(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, &convert_dsa_private_key);
+  __block SecKeyRef publicKey;
+  convert_private_key_to_raw_key(dsa, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+    publicKey = convert_dsa_private_key(keyRef);
+  });
+  return publicKey;
 }
 
 #pragma clang diagnostic pop
@@ -1142,36 +1157,133 @@ void _libssh2_init_aes_ctr(void) {
     if the server accepts will ask the client to sign data to prove it owns the
     corresponding private key.
 
-    session        - In parameter. May be NULL when testing, when non-NULL
-                     should be used for allocations.
-    method         - Out parameter, must be set upon successful return, one of
-                     "ssh-rsa" and "ssh-dss" based on whether the public key is
-                     RSA or DSA.
-    method_len     - Out parameter, must be set upon successful return, the
-                     length of the method string written out.
-    pubkeydata     - Out parameter, must be set upon successful return. See
-                     `gen_publickey_from_rsa` and `gen_publickey_from_dsa` for
-                     the respective formats expected.
-    pubkeydata_len - Out parameter, must be set upon successful return, the
-                     length of the pubkeydata written out.
-    privatekey     - File system path to the private key file, non NULL.
-    passphrase     - Passphrase for the private key file, may be NULL. Not
-                     covariant with whether the private key is encrypted.
+    session            - In parameter. May be NULL when testing, when non-NULL
+                         should be used for allocations.
+    method_ref         - Out parameter, must be set upon successful return, one
+                         of "ssh-rsa" and "ssh-dss" based on whether the public
+                         key is RSA or DSA. Malloced, caller must free.
+    method_len_ref     - Out parameter, must be set upon successful return, the
+                         length of the method string written out.
+    pubkeydata_ref     - Out parameter, must be set upon successful return. See
+                         `gen_publickey_from_rsa` and `gen_publickey_from_dsa`
+                         for the respective formats expected. Malloced, caller
+                         must free.
+    pubkeydata_len_ref - Out parameter, must be set upon successful return, the
+                         length of the pubkeydata written out.
+    privatekey         - File system path to the private key file, non NULL.
+    passphrase         - Passphrase for the private key file, may be NULL. Not
+                         covariant with whether the private key is encrypted.
 
     Returns 0 if the public key is created, 1 otherwise.
  */
 int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
-                              unsigned char **method,
-                              size_t *method_len,
-                              unsigned char **pubkeydata,
-                              size_t *pubkeydata_len,
+                              unsigned char **method_ref,
+                              size_t *method_len_ref,
+                              unsigned char **pubkeydata_ref,
+                              size_t *pubkeydata_len_ref,
                               const char *privatekeyPath,
                               const char *passphrase) {
-  assert(method != NULL);
-  assert(method_len != NULL);
-  assert(pubkeydata != NULL);
-  assert(pubkeydata_len != NULL);
+  assert(method_ref != NULL);
+  assert(method_len_ref != NULL);
+  assert(pubkeydata_ref != NULL);
+  assert(pubkeydata_len_ref != NULL);
   assert(privatekeyPath != NULL);
 
-  return 0;
+  SecKeyRef key;
+  int error = _libssh2_key_new_from_path(&key, kSecItemTypePrivateKey, privatekeyPath, passphrase);
+  if (error != 0) {
+    return error;
+  }
+
+  CSSM_KEY const *cssmKey;
+  OSStatus secErr = SecKeyGetCSSMKey(key, &cssmKey);
+  if (secErr != errSecSuccess) {
+    CFRelease(key);
+    return 1;
+  }
+
+  CSSM_ALGORITHMS algorithm = cssmKey->KeyHeader.AlgorithmId;
+  if (algorithm == CSSM_ALGID_RSA) {
+    __block CFDataRef eData = NULL, nData = NULL;
+
+    convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
+      SecAsn1CoderRef coder;
+      OSStatus error = SecAsn1CoderCreate(&coder);
+      if (error != errSecSuccess) {
+        return;
+      }
+
+      _libssh2_pkcs1_rsa_private_key privateKeyData;
+      error = SecAsn1Decode(coder, keyRef->KeyData.Data, keyRef->KeyData.Length, _libssh2_pkcs1_rsa_private_key_template, &privateKeyData);
+      if (error != errSecSuccess) {
+        SecAsn1CoderRelease(coder);
+        return;
+      }
+
+      eData = CreateDataFromAsn1Item(&privateKeyData.publicExponent);
+      nData = CreateDataFromAsn1Item(&privateKeyData.modulus);
+
+      SecAsn1CoderRelease(coder);
+    });
+
+    if (eData == NULL || nData == NULL) {
+      if (eData != NULL) CFRelease(eData);
+      if (nData != NULL) CFRelease(nData);
+      CFRelease(key);
+      return 1;
+    }
+
+    char const *method = "ssh-rsa";
+    size_t methodLength = strlen(method);
+
+    *method_ref = session ? LIBSSH2_ALLOC(session, methodLength) : malloc(methodLength);
+    *method_len_ref = methodLength;
+    memcpy(*method_ref, method, methodLength);
+
+    /*
+      	method length (4 bytes, network byte order)
+     		method (x bytes)
+     		e length (4 bytes, network byte order)
+     		e (x bytes, var len int encoding, public exponent)
+     		n length (4 bytes, network byte order)
+     		n (x bytes, var len int encoding, modulus)
+     */
+
+    CFMutableDataRef pubData = CFDataCreateMutable(kCFAllocatorDefault, 0);
+
+    uint32_t encodedMethodLength = htonl(methodLength);
+    CFDataAppendBytes(pubData, (uint8_t *)&encodedMethodLength, 4);
+    CFDataAppendBytes(pubData, (uint8_t *)method, methodLength);
+
+    void (^appendBigEndianInteger)(CFDataRef) = ^(CFDataRef data) {
+      uint32_t encodedLength = htonl((uint32_t)CFDataGetLength(data));
+      CFDataAppendBytes(pubData, (uint8_t *)&encodedLength, 4);
+      CFDataAppendBytes(pubData, CFDataGetBytePtr(data), CFDataGetLength(data));
+    };
+    appendBigEndianInteger(eData);
+    appendBigEndianInteger(nData);
+
+    *pubkeydata_len_ref = CFDataGetLength(pubData);
+    *pubkeydata_ref = session ? LIBSSH2_ALLOC(session, *pubkeydata_len_ref) : malloc(*pubkeydata_len_ref);
+    CFDataGetBytes(pubData, CFRangeMake(0, *pubkeydata_len_ref), *pubkeydata_ref);
+
+    CFRelease(pubData);
+
+    CFRelease(eData);
+    CFRelease(nData);
+
+    CFRelease(key);
+
+    return 0;
+  }
+
+  CFRelease(key);
+  return 1;
+
+  if (algorithm == CSSM_ALGID_DSA) {
+    //convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+    //
+    //});
+    return 1;
+  }
 }
