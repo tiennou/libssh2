@@ -385,6 +385,22 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
   return 0;
 }
 
+static int _libssh2_key_new_from_path(SecKeyRef *keyRef, SecExternalItemType type, char const *filename, char const *passphrase) {
+  assert(keyRef != NULL);
+  assert(filename != NULL);
+
+  CFDataRef keyData = CreateDataFromFile(filename);
+  if (keyData == NULL) {
+    return 1;
+  }
+
+  int error = _libssh2_key_new_from_data(keyRef, keyData, type, filename, passphrase);
+
+  CFRelease(keyData);
+
+  return error;
+}
+
 #pragma mark - PKCS#1 RSA
 
 #pragma clang diagnostic push
@@ -544,23 +560,11 @@ int _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
 
     Returns 0 if the key is created, 1 otherwise.
 */
-int _libssh2_rsa_new_private(libssh2_rsa_ctx ** rsa,
-                             LIBSSH2_SESSION * session,
+int _libssh2_rsa_new_private(libssh2_rsa_ctx **rsa,
+                             LIBSSH2_SESSION *session,
                              const char *filename,
                              unsigned const char *passphrase) {
-  assert(rsa != NULL);
-  assert(filename != NULL);
-
-  CFDataRef keyData = CreateDataFromFile(filename);
-  if (keyData == NULL) {
-    return 1;
-  }
-
-  int error = _libssh2_key_new_from_data(rsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
-
-  CFRelease(keyData);
-
-  return error;
+  return _libssh2_key_new_from_path(rsa, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 }
 
 #pragma clang diagnostic push
@@ -825,19 +829,7 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx **dsa,
                              LIBSSH2_SESSION *session,
                              const char *filename,
                              unsigned const char *passphrase) {
-  assert(dsa != NULL);
-  assert(filename != NULL);
-
-  CFDataRef keyData = CreateDataFromFile(filename);
-  if (keyData == NULL) {
-    return 1;
-  }
-
-  int error = _libssh2_key_new_from_data(dsa, keyData, kSecItemTypePrivateKey, filename, (char const *)passphrase);
-
-  CFRelease(keyData);
-
-  return error;
+  return _libssh2_key_new_from_path(dsa, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 }
 
 #pragma clang diagnostic push
