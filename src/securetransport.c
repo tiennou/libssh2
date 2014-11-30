@@ -159,7 +159,7 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
     return false;
   }
 
-  return (output == kCFBooleanTrue);
+  return CFBooleanGetValue(output);
 }
 
 static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, char const *footer) {
