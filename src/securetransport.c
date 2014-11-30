@@ -79,7 +79,7 @@ static int _libssh2_key_sign_hash(LIBSSH2_SESSION *session,
   }
 
   Boolean setAttributes = true;
-  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsPlainText, NULL);
+  setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsDigest, NULL);
   setAttributes &= SecTransformSetAttribute(transform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
 
   CFDataRef inputData = CFDataCreate(kCFAllocatorDefault, hash, hash_len);
