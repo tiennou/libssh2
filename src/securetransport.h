@@ -79,7 +79,7 @@ typedef void *_libssh2_bn_ctx;
 #define _libssh2_bn_rand(bn, bits, top, bottom) \
 do {\
   if (bn != NULL) CCBigNumFree(bn);\
-  bn = CCBigNumCreateRandom(NULL, bits, top, bottom);\
+  bn = CCBigNumCreateRandom(NULL, bits, bits, 0);\
 } while (0)
 
 #define _libssh2_bn_mod_exp(r, a, power, modulus, ctx) CCBigNumModExp(r, a, power, modulus)
