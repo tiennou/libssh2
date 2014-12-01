@@ -645,11 +645,11 @@ int _libssh2_rsa_new(libssh2_rsa_ctx **rsa,
   _libssh2_pkcs1_rsa_public_key keyData = {
     .modulus = {
       .Length = nlen,
-      .Data = ndata,
+      .Data = (uint8_t *)ndata,
     },
     .publicExponent = {
       .Length = elen,
-      .Data = edata,
+      .Data = (uint8_t *)edata,
     },
   };
   return _libssh2_new_from_binary_template(rsa, CSSM_KEYCLASS_PUBLIC_KEY, &keyData, _libssh2_pkcs1_rsa_public_key_template);
@@ -742,7 +742,7 @@ static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef key) {
   __block SecKeyRef publicKey;
   convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_PKCS1, ^(CSSM_KEY const *keyRef) {
     if (keyRef->KeyHeader.AlgorithmId == CSSM_ALGID_RSA && keyRef->KeyHeader.KeyClass == CSSM_KEYCLASS_PUBLIC_KEY) {
-      publicKey = CFRetain(key);
+      publicKey = (SecKeyRef)CFRetain(key);
     }
     else {
       publicKey = convert_rsa_private_key(keyRef);
@@ -1081,11 +1081,11 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
 
     Returns an initialised owned public DSA SecKeyRef or NULL.
  */
-static SecKeyRef convert_dsa_private_key_to_public_key(SecKeyRef privateKey) {
+static SecKeyRef convert_dsa_private_key_to_public_key(SecKeyRef key) {
   __block SecKeyRef publicKey;
-  convert_private_key_to_raw_key(privateKey, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
+  convert_private_key_to_raw_key(key, CSSM_KEYBLOB_RAW_FORMAT_OPENSSL, ^(CSSM_KEY const *keyRef) {
     if (keyRef->KeyHeader.AlgorithmId == CSSM_ALGID_DSA && keyRef->KeyHeader.KeyClass == CSSM_KEYCLASS_PUBLIC_KEY) {
-      publicKey = CFRetain(privateKey);
+      publicKey = (SecKeyRef)CFRetain(key);
     }
     else {
       publicKey = convert_dsa_private_key(keyRef);
