@@ -10,9 +10,9 @@
 
 /*
     Create a CFDataRef object from the given path.
-    
+
     path - nul terminated C string.
-    
+
     Returns an initialised owned CFDataRef or NULL.
  */
 static CFDataRef CreateDataFromFile(char const *path) {
@@ -55,9 +55,9 @@ static CFDataRef CreateDataFromFile(char const *path) {
 
 /*
     Create a CFDataRef object from the given ASN.1 object.
- 
+
     itemRef - Pointer to a SecAsn1Item struct, passed byref to avoid copying.
-    
+
     Returns an initialised owned CFDataRef object.
  */
 static CFDataRef CreateDataFromAsn1Item(SecAsn1Item *itemRef) {
@@ -123,9 +123,9 @@ static bool _libssh2_key_sign_hash(LIBSSH2_SESSION *session,
 
 /*
     Verify a message signature with a public key.
- 
+
     A sha1 hash should be computed over the message before verifying.
-  
+
     key     - Initialised public key, non NULL.
     sig     - Binary data, non NULL.
     sig_len - Length of sig, non zero.
@@ -182,11 +182,11 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
 
 /*
     Wrap binary data in a PEM envelope.
-  
+
     data   - Input data, encoded as Base64 before being wrapped.
     header - PEM header, should include any newline or PEM parameters.
     footer - PEM footer, should match the PEM header and prefix with a newline.
-    
+
     Returns an initialised owned CFDataRef object or NULL.
  */
 static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, char const *footer) {
@@ -220,11 +220,11 @@ static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, c
 /*
     Initialise a SecKeyRef from binary data, supports encoded private and public
     keys.
-    
+
     This uses SecItemImport to guess what the key format is, a variety are
     supported, see _libssh2_rsa_new_private and _libssh2_dsa_new_private for the
     supported format matrices.
-    
+
     keyRef     - Out parameter, populated with an owned key on successful
                  return.
     keyData    - Initialised binary key data.
@@ -235,7 +235,7 @@ static CFDataRef _libssh2_wrap_data_in_pem(CFDataRef data, char const *header, c
     passphrase - nul terminated C string. Optional, can be NULL. If the key is
                  found to be encrypted, this passphrase is used for the key
                  derivation to decrypt the key.
- 
+
     Returns 0 if the key was successfully parsed, 1 otherwise.
  */
 static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecExternalItemType type, char const *filename, char const *passphrase) {
@@ -336,9 +336,9 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
   }
 
   *keyRef = (SecKeyRef)CFRetain(item);
-  
+
   CFRelease(items);
-  
+
   return 0;
 }
 
@@ -348,7 +348,7 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
 /*
     Given a private key, unwrap it to create a process local raw key in the
     given format.
-    
+
     privateKey    - The key to unwrap and expose the fields of locally.
     privateFormat - The binary format requested for the unwrapped key. See
                     Supported_CSP_Algorithms.doc for the CSSM supported formats
@@ -357,7 +357,7 @@ static int _libssh2_key_new_from_data(SecKeyRef *keyRef, CFDataRef keyData, SecE
                     decoded into the requested format. Not invoked otherwise.
                     The key memory is only valid for the invocation of this
                     block afterwhich it is reclaimed.
- 
+
     Returns nothing.
  */
 static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FORMAT privateFormat, void (^convert)(CSSM_KEY const *)) {
@@ -375,7 +375,7 @@ static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FO
   if (keyRef->KeyHeader.BlobType != CSSM_KEYBLOB_REFERENCE) {
     return;
   }
-  
+
   CSSM_CSP_HANDLE csp;
   error = SecKeyGetCSPHandle(privateKey, &csp);
   if (error != errSecSuccess) {
@@ -416,12 +416,12 @@ static void convert_private_key_to_raw_key(SecKeyRef privateKey, CSSM_KEYBLOB_FO
 /*
     Encode the given blob conforming to the given format with the given template
     and initialise a key with the result.
-    
+
     keyRef    - Out parameter, populated with an owned key on successful return.
     keyClass  - The class, private or public, of the encoded bytes.
     bytes     - A pointer to the structured data compatible with templates.
     templates - An ASN.1 schema to encode bytes with.
- 
+
     Returns 0 if the key was initialised successfully, 1 otherwise.
  */
 static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
@@ -469,11 +469,11 @@ static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
 /*
     Initialise a SecKeyRef from a file path, supports encoded private and public
     keys.
- 
+
     filename - This file is read to get the key data.
-    
+
     See _libssh2_key_new_from_data for documentation on the parameters.
- 
+
     Returns 0 if the key was successfully decoded, 1 otherwise.
  */
 static int _libssh2_key_new_from_path(SecKeyRef *keyRef, SecExternalItemType type, char const *filename, char const *passphrase) {
@@ -548,7 +548,7 @@ static SecAsn1Template const _libssh2_pkcs1_rsa_public_key_template[] = {
 
 /*
     Release the given key.
-    
+
     Returns 0.
  */
 int _libssh2_rsa_free(libssh2_rsa_ctx *rsa) {
@@ -659,14 +659,14 @@ int _libssh2_rsa_new(libssh2_rsa_ctx **rsa,
     Create an RSA private key from a file.
 
     Supported formats:
- 
+
         Format  | Encrypted | Non-encrypted |
-    
+
     PKCS#1 PEM        x             x
     PKCS#1 DER                      x
     PKCS#8 PEM        x             x
     PKCS#8 DER        x             x
- 
+
     rsa        - Out parameter, populated with an owned key on successful
                  return.
     session    - Non-NULL when invoked from libssh2.
@@ -690,7 +690,7 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx **rsa,
     Convert the given raw RSA private PKCS#1 CSSM_KEY to a public key.
 
     keyRef - Non NULL raw CSSM_KEY.
-    
+
     Returns an initialised owned SecKeyRef or NULL.
  */
 static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
@@ -730,12 +730,12 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
 
 /*
     Convert the given key to a public key.
-    
+
     The given key may already be a public key, in which case the same key is
     returned with a +1 retain count.
-    
+
     key - A private or public RSA key.
-    
+
     Returns an initialised owned public RSA SecKeyRef or NULL.
  */
 static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef key) {
@@ -755,15 +755,15 @@ static SecKeyRef convert_rsa_private_key_to_public_key(SecKeyRef key) {
 
 /*
     Verify an RSA signature with an RSA key.
-  
+
     The given RSA key can be a private or public key.
-    
+
     rsa     - Initialised RSA key, non NULL.
     sig     - Binary data, non NULL.
     sig_len - Length of sig, non zero.
     m       - Binary message, non NULL.
     m_len   - Length of m, non zero.
- 
+
     Returns 0 if the signature is valid, 1 otherwise.
  */
 int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx *rsa,
@@ -789,7 +789,7 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx *rsa,
 
 /*
     Sign a SHA1 hash with an RSA key private key.
- 
+
     session       - In, non NULL when invoked from libssh2.
     rsa           - Initialised RSA private key, non NULL.
     hash          - In parameter, SHA1 hash bytes.
@@ -798,7 +798,7 @@ int _libssh2_rsa_sha1_verify(libssh2_rsa_ctx *rsa,
                     successful return.
     signature_len - Out parameter, populated with the length of the malloced
                     signature on successful return.
- 
+
     Returns 0 if the signature has been signed, 1 otherwise.
  */
 int _libssh2_rsa_sha1_sign(LIBSSH2_SESSION *session,
@@ -890,7 +890,7 @@ static SecAsn1Template const _libssh2_dsa_signature_template[] = {
 
 /*
     Release the given key.
-    
+
     Returns 0.
  */
 int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
@@ -902,11 +902,11 @@ int _libssh2_dsa_free(libssh2_dsa_ctx *dsa) {
     Create a DSA key from the raw numeric components.
 
     Can be invoked without x to create a public key.
-  
+
     dsa           - Out parameter, populated with an owned key on successful
                     return.
     p, q, g, y, x - Positive integer in big-endian form.
- 
+
     Returns 0 if the key is created, 1 otherwise.
  */
 int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
@@ -1023,7 +1023,7 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx **dsa,
     Convert the given raw DSA private OpenSSL CSSM_KEY to a public key.
 
     keyRef - Non NULL raw CSSM_KEY.
-    
+
     Returns an initialised owned SecKeyRef or NULL.
  */
 static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
@@ -1073,12 +1073,12 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
 
 /*
     Convert the given key to a public key.
-    
+
     The given key may already be a public key, in which case the same key is
     returned with a +1 retain count.
-    
+
     key - A private or public DSA key.
-    
+
     Returns an initialised owned public DSA SecKeyRef or NULL.
  */
 static SecKeyRef convert_dsa_private_key_to_public_key(SecKeyRef privateKey) {
@@ -1098,7 +1098,7 @@ static SecKeyRef convert_dsa_private_key_to_public_key(SecKeyRef privateKey) {
 
 /*
     Verify a DSA signature with a DSA key.
- 
+
     The given DSA key can be a private or public DSA key.
 
     dsa     - Initialised DSA key, non NULL.
@@ -1223,7 +1223,7 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx *dsa,
 
 /*
     Initialise a cipher.
-  
+
     ctx     - Out, non-NULL, will be populated with a cipher on successful
               return.
     algo    - Cipher algorithm, specifies the type, key size and mode.
@@ -1232,7 +1232,7 @@ int _libssh2_dsa_sha1_sign(libssh2_dsa_ctx *dsa,
     secret  - In parameter. The secret key, is the length of the selected cipher
               key size.
     encrypt - 1 if encryption is requested, 0 if decryption is requested.
-    
+
     Returns 0 if the cipher is successfully initialised, 1 otherwise.
  */
 int _libssh2_cipher_init(_libssh2_cipher_ctx *ctx,
@@ -1310,7 +1310,7 @@ int _libssh2_cipher_init(_libssh2_cipher_ctx *ctx,
 
 /*
     Execute the cipher against the given data block.
-    
+
     ctx       - In parameter. An initialised cipher.
     algo      - Cipher algorithm, specifies the type, key size and mode.
     encrypt   - 1 if encryption is requested, 0 if decryption is requested.
@@ -1318,7 +1318,7 @@ int _libssh2_cipher_init(_libssh2_cipher_ctx *ctx,
                 decrypted/encrypted data is written back to this buffer on
                 successful return.
     blocksize - The length of block in bytes.
-    
+
     Returns 0 if the block is successfuly encrypted/decrypted, 1 otherwise.
  */
 int _libssh2_cipher_crypt(_libssh2_cipher_ctx *ctx,
@@ -1341,7 +1341,7 @@ int _libssh2_cipher_crypt(_libssh2_cipher_ctx *ctx,
 
 /*
     Release the given cipher.
-  
+
     Returns nothing.
  */
 void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx) {
@@ -1350,7 +1350,7 @@ void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx) {
 
 /*
     Initialise AES CTR (counter) mode.
-    
+
     Unimplemented.
  */
 void _libssh2_init_aes_ctr(void) {
@@ -1364,7 +1364,7 @@ void _libssh2_init_aes_ctr(void) {
 
     Used to provide the public key authentication method, only RSA and DSA keys
     are supported.
- 
+
     If the server accepts the returned public key, the client will be asked to
     sign something with the corresponding private key to prove ownership.
 
