@@ -959,7 +959,10 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
 
   _libssh2_openssl_dsa_public_key publicKeyData = {
     .alg = {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
       .oid = CSSMOID_DSA_CMS,
+#pragma clang diagnostic pop
       .params = params,
     },
   };
