@@ -711,13 +711,8 @@ static SecKeyRef convert_rsa_private_key(CSSM_KEY const *keyRef) {
     return NULL;
   }
 
-  _libssh2_pkcs1_rsa_public_key publicKeyData = {
-    .modulus = privateKeyData.modulus,
-    .publicExponent = privateKeyData.publicExponent,
-  };
-
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_pkcs1_rsa_public_key_template);
+  int keyError = _libssh2_rsa_new(&publicKey, privateKeyData.publicExponent.Data, privateKeyData.publicExponent.Length, privateKeyData.modulus.Data, privateKeyData.modulus.Length, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0);
 
   SecAsn1CoderRelease(coder);
 
@@ -926,9 +921,22 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
   assert(gdata != NULL);
   assert(ydata != NULL);
 
-  if (x != NULL) {
-#warning test this encoding
+  _libssh2_dsa_params params = {
+    .p = {
+      .Data = (uint8_t *)pdata,
+      .Length = plen,
+    },
+    .q = {
+      .Data = (uint8_t *)qdata,
+      .Length = qlen,
+    },
+    .g = {
+      .Data = (uint8_t *)gdata,
+      .Length = glen,
+    },
+  };
 
+  if (x != NULL) {
     uint8_t version = 1;
 
     _libssh2_openssl_dsa_private_key keyData = {
@@ -936,20 +944,7 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
         .Data = &version,
         .Length = sizeof(version),
       },
-      .params = {
-        .p = {
-          .Data = (uint8_t *)pdata,
-          .Length = plen,
-        },
-        .q = {
-          .Data = (uint8_t *)qdata,
-          .Length = qlen,
-        },
-        .g = {
-          .Data = (uint8_t *)gdata,
-          .Length = glen,
-        },
-      },
+      .params = params,
       .pub = {
         .Data = (uint8_t *)ydata,
         .Length = ylen,
@@ -962,30 +957,36 @@ int _libssh2_dsa_new(libssh2_dsa_ctx **dsa,
     return _libssh2_new_from_binary_template(dsa, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template);
   }
 
-  _libssh2_openssl_dsa_public_key keyData = {
+  _libssh2_openssl_dsa_public_key publicKeyData = {
     .alg = {
       .oid = CSSMOID_DSA_CMS,
-      .params = {
-        .p = {
-          .Data = (uint8_t *)pdata,
-          .Length = plen,
-        },
-        .q = {
-          .Data = (uint8_t *)qdata,
-          .Length = qlen,
-        },
-        .g = {
-          .Data = (uint8_t *)gdata,
-          .Length = glen,
-        },
-      },
-    },
-    .pub = {
-      .Data = (uint8_t *)ydata,
-      .Length = ylen,
+      .params = params,
     },
   };
-  return _libssh2_new_from_binary_template(dsa, CSSM_KEYCLASS_PUBLIC_KEY, &keyData, _libssh2_openssl_dsa_public_key_template);
+
+  SecAsn1CoderRef coder;
+  OSStatus error = SecAsn1CoderCreate(&coder);
+  if (error != errSecSuccess) {
+    return 1;
+  }
+
+  SecAsn1Item pub = {
+    .Data = (uint8_t *)ydata,
+    .Length = ylen,
+  };
+  error = SecAsn1EncodeItem(coder, &pub, kSecAsn1UnsignedIntegerTemplate, &publicKeyData.pub);
+  if (error != errSecSuccess) {
+    SecAsn1CoderRelease(coder);
+    return 1;
+  }
+
+  publicKeyData.pub.Length *= 8;
+
+  int keyError = _libssh2_new_from_binary_template(dsa, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template);
+
+  SecAsn1CoderRelease(coder);
+
+  return keyError;
 }
 
 /*
@@ -1044,23 +1045,8 @@ static SecKeyRef convert_dsa_private_key(CSSM_KEY const *keyRef) {
     return NULL;
   }
 
-  _libssh2_openssl_dsa_public_key publicKeyData = {
-    .alg = {
-      .oid = CSSMOID_DSA_CMS,
-      .params = privateKeyData.params,
-    },
-  };
-
-  error = SecAsn1EncodeItem(coder, &privateKeyData.pub, kSecAsn1UnsignedIntegerTemplate, &publicKeyData.pub);
-  if (error != errSecSuccess) {
-    SecAsn1CoderRelease(coder);
-    return NULL;
-  }
-
-  publicKeyData.pub.Length *= 8;
-
   SecKeyRef publicKey;
-  int keyError = _libssh2_new_from_binary_template(&publicKey, CSSM_KEYCLASS_PUBLIC_KEY, &publicKeyData, _libssh2_openssl_dsa_public_key_template);
+  int keyError = _libssh2_dsa_new(&publicKey, privateKeyData.params.p.Data, privateKeyData.params.p.Length, privateKeyData.params.q.Data, privateKeyData.params.q.Length, privateKeyData.params.g.Data, privateKeyData.params.g.Length, privateKeyData.pub.Data, privateKeyData.pub.Length, NULL, 0);
 
   SecAsn1CoderRelease(coder);
 
