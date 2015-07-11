@@ -14,6 +14,9 @@ endif
 if MBEDTLS
 include ../Makefile.mbedTLS.inc
 endif
+if SECURETRANSPORT
+include ../Makefile.SecureTransport.inc
+endif
 
 # Makefile.inc provides the CSOURCES and HHEADERS defines
 include ../Makefile.inc
