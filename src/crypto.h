@@ -52,6 +52,7 @@
 
 #ifdef LIBSSH2_OS400QC3
 #include "os400qc3.h"
+#endif
 
 #ifdef LIBSSH2_SECURETRANSPORT
 #include "securetransport.h"
