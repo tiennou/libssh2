@@ -48,14 +48,28 @@ set(CRYPTO_BACKEND
   ""
   CACHE
   STRING
-  "The backend to use for cryptography: OpenSSL, Libgcrypt or WinCNG, mbedTLS
-or empty to try any available")
+  "The backend to use for cryptography: OpenSSL, Libgcrypt, WinCNG, mbedTLS,
+  SecureTransport, or empty to try any available")
 
 # If the crypto backend was given, rather than searching for the first
 # we are able to find, the find_package commands must abort configuration
 # and report to the user.
 if(CRYPTO_BACKEND)
   set(SPECIFIC_CRYPTO_REQUIREMENT REQUIRED)
+endif()
+
+if(CRYPTO_BACKEND STREQUAL "SecureTransport" OR NOT CRYPTO_BACKEND)
+  find_library(SECURITY_LIBRARY Security REQUIRED)
+  find_path(SECURITY_INCLUDE_DIR "Security/Security.h")
+  find_library(COREFOUNDATION_LIBRARY CoreFoundation REQUIRED)
+
+  if(SECURITY_LIBRARY AND SECURITY_INCLUDE_DIR AND COREFOUNDATION_LIBRARY)
+    set(CRYPTO_BACKEND "SecureTransport")
+    set(CRYPTO_SOURCES securetransport.c securetransport.h)
+    list(APPEND PRIVATE_COMPILE_DEFINITIONS LIBSSH2_SECURETRANSPORT)
+
+    list(APPEND LIBRARIES ${SECURITY_LIBRARY} ${COREFOUNDATION_LIBRARY})
+  endif()
 endif()
 
 if(CRYPTO_BACKEND STREQUAL "OpenSSL" OR NOT CRYPTO_BACKEND)
