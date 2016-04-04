@@ -1374,9 +1374,8 @@ void _libssh2_init_aes_ctr(void) {
 }
 
 #pragma mark - Private Public Keys
-
 /*
-    Extract a public key from a private key file.
+    Extract a public key from a private key
 
     Used to provide the public key authentication method, only RSA and DSA keys
     are supported.
@@ -1398,32 +1397,24 @@ void _libssh2_init_aes_ctr(void) {
                          on successful return.
     pubkeydata_len_ref - Out parameter, the length of the pubkeydata data
                          written on successful return.
-    privatekey         - nul terminated C string. File system path to the
-                         private key file, non NULL.
     passphrase         - nul terminated C String. Optional, may be NULL. The
                          passphrase for the private key file. Not covariant with
                          whether the private key is encrypted.
+    key                - SecKeyRef to the key.
 
     Returns 0 if the public key is created, 1 otherwise.
  */
-int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
-                              unsigned char **method_ref,
-                              size_t *method_len_ref,
-                              unsigned char **pubkeydata_ref,
-                              size_t *pubkeydata_len_ref,
-                              const char *privatekeyPath,
-                              const char *passphrase) {
+
+int _libssh2_pub_priv_key(LIBSSH2_SESSION *session,
+                          unsigned char **method_ref,
+                          size_t *method_len_ref,
+                          unsigned char **pubkeydata_ref,
+                          size_t *pubkeydata_len_ref,
+                          SecKeyRef key) {
   assert(method_ref != NULL);
   assert(method_len_ref != NULL);
   assert(pubkeydata_ref != NULL);
   assert(pubkeydata_len_ref != NULL);
-  assert(privatekeyPath != NULL);
-
-  SecKeyRef key;
-  int error = _libssh2_key_new_from_path(&key, kSecItemTypePrivateKey, privatekeyPath, passphrase);
-  if (error != 0) {
-    return error;
-  }
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -1612,4 +1603,65 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
 
   CFRelease(key);
   return 1;
+}
+
+int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
+                              unsigned char **method_ref,
+                              size_t *method_len_ref,
+                              unsigned char **pubkeydata_ref,
+                              size_t *pubkeydata_len_ref,
+                              const char *privatekeyPath,
+                              const char *passphrase)
+{
+  assert(method_ref != NULL);
+  assert(method_len_ref != NULL);
+  assert(pubkeydata_ref != NULL);
+  assert(pubkeydata_len_ref != NULL);
+  assert(privatekeyPath != NULL);
+
+  SecKeyRef key;
+  int error = _libssh2_key_new_from_path(&key, kSecItemTypePrivateKey, privatekeyPath, passphrase);
+  if (error != 0) {
+    return error;
+  }
+
+  error = _libssh2_pub_priv_key(session, method_ref, method_len_ref, pubkeydata_ref, pubkeydata_len_ref, key);
+
+  CFRelease(key);
+  return error;
+}
+
+int _libssh2_pub_priv_keyfilememory(LIBSSH2_SESSION *session,
+                                    unsigned char **method_ref,
+                                    size_t *method_len_ref,
+                                    unsigned char **pubkeydata_ref,
+                                    size_t *pubkeydata_len_ref,
+                                    const char *privatekeydata,
+                                    size_t privatekeydata_len,
+                                    const char *passphrase)
+{
+  assert(method_ref != NULL);
+  assert(method_len_ref != NULL);
+  assert(pubkeydata_ref != NULL);
+  assert(pubkeydata_len_ref != NULL);
+  assert(privatekeydata != NULL);
+
+  CFDataRef keyData = CFDataCreate(kCFAllocatorDefault, (const unsigned char*)privatekeydata, privatekeydata_len);
+
+  SecKeyRef key;
+  int error = _libssh2_key_new_from_data(&key, keyData, kSecItemTypePrivateKey, NULL, NULL);
+
+  if (error) {
+    goto cleanup;
+  }
+
+  error = _libssh2_pub_priv_key(session, method_ref, method_len_ref, pubkeydata_ref, pubkeydata_len_ref, key);
+
+  cleanup:
+  {
+    CFRelease(key);
+    CFRelease(keyData);
+  }
+
+  return error;
 }
