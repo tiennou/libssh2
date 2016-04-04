@@ -683,6 +683,18 @@ int _libssh2_rsa_new_private(libssh2_rsa_ctx **rsa,
   return _libssh2_key_new_from_path(rsa, kSecItemTypePrivateKey, filename, (char const *)passphrase);
 }
 
+int _libssh2_rsa_new_private_frommemory(libssh2_rsa_ctx ** rsa,
+                                        LIBSSH2_SESSION * session,
+                                        const char *filedata, size_t filedata_len,
+                                        unsigned const char *passphrase)
+{
+  CFDataRef keyData = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const unsigned char*)filedata, filedata_len, kCFAllocatorNull);
+  int error = _libssh2_new_from_binary_template(rsa, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template);
+
+  CFRelease(keyData);
+  return error;
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
@@ -1018,6 +1030,21 @@ int _libssh2_dsa_new_private(libssh2_dsa_ctx **dsa,
                              const char *filename,
                              unsigned const char *passphrase) {
   return _libssh2_key_new_from_path(dsa, kSecItemTypePrivateKey, filename, (char const *)passphrase);
+}
+
+int _libssh2_dsa_new_private_frommemory(libssh2_dsa_ctx ** dsa,
+                                        LIBSSH2_SESSION * session,
+                                        const char *filedata, size_t filedata_len,
+                                        unsigned const char *passphrase)
+{
+
+  CFDataRef keyData = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (unsigned const char*)filedata, filedata_len, kCFAllocatorNull);
+
+  int res = _libssh2_new_from_binary_template(dsa, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_openssl_dsa_private_key_template);
+
+  CFRelease(keyData);
+
+  return res;
 }
 
 #pragma clang diagnostic push
