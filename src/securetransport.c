@@ -1627,7 +1627,6 @@ int _libssh2_pub_priv_keyfile(LIBSSH2_SESSION *session,
 
   error = _libssh2_pub_priv_key(session, method_ref, method_len_ref, pubkeydata_ref, pubkeydata_len_ref, key);
 
-  CFRelease(key);
   return error;
 }
 
@@ -1659,7 +1658,6 @@ int _libssh2_pub_priv_keyfilememory(LIBSSH2_SESSION *session,
 
   cleanup:
   {
-    CFRelease(key);
     CFRelease(keyData);
   }
 
