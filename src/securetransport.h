@@ -37,12 +37,16 @@
 
 // HMAC
 #define LIBSSH2_HMAC_RIPEMD 0
+#define LIBSSH2_HMAC_SHA256 1
+#define LIBSSH2_HMAC_SHA512 1
 
 #define libssh2_hmac_ctx CCHmacContext
 #define libssh2_hmac_ctx_init(ctx)
 #define libssh2_hmac_sha1_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgSHA1, key, keylen)
 #define libssh2_hmac_md5_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgMD5, key, keylen)
 //#define libssh2_hmac_ripemd160_init(ctx, key, keylen)
+#define libssh2_hmac_sha256_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgSHA256, key, keylen)
+#define libssh2_hmac_sha512_init(ctx, key, keylen) CCHmacInit(ctx, kCCHmacAlgSHA512, key, keylen)
 #define libssh2_hmac_update(ctx, data, datalen) CCHmacUpdate(&ctx, data, datalen)
 #define libssh2_hmac_final(ctx, data) CCHmacFinal(&ctx, data)
 #define libssh2_hmac_cleanup(ctx)
