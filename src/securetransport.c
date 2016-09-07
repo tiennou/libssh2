@@ -61,7 +61,7 @@ static CFDataRef CreateDataFromFile(char const *path) {
     Returns an initialised owned CFDataRef object.
  */
 static CFDataRef CreateDataFromAsn1Item(SecAsn1Item *itemRef) {
-  return CFDataCreate(kCFAllocatorDefault, itemRef->Data, itemRef->Length);
+  return CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, itemRef->Data, itemRef->Length, kCFAllocatorNull);
 }
 
 /*
@@ -143,7 +143,7 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
   assert(sig != NULL);
   assert(m != NULL);
 
-  CFDataRef signatureData = CFDataCreate(kCFAllocatorDefault, sig, sig_len);
+  CFDataRef signatureData = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, sig, sig_len, kCFAllocatorNull);
 
   SecTransformRef transform = SecVerifyTransformCreate(key, signatureData, NULL);
 
@@ -155,7 +155,7 @@ static bool _libssh2_key_verify_hash(SecKeyRef key,
   setAttributes &= SecTransformSetAttribute(transform, kSecInputIsAttributeName, kSecInputIsPlainText, NULL);
   setAttributes &= SecTransformSetAttribute(transform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
 
-  CFDataRef message = CFDataCreate(kCFAllocatorDefault, m, m_len);
+  CFDataRef message = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, m, m_len, kCFAllocatorNull);
   setAttributes &= SecTransformSetAttribute(transform, kSecTransformInputAttributeName, message, NULL);
 
   if (!setAttributes) {
@@ -455,10 +455,9 @@ static int _libssh2_new_from_binary_template(SecKeyRef *keyRef,
 
   CFDataRef cfKeyData = CreateDataFromAsn1Item(&keyData);
 
-  SecAsn1CoderRelease(coder);
-
   int keyError = _libssh2_key_new_from_data(keyRef, cfKeyData, type, NULL, NULL);
 
+  SecAsn1CoderRelease(coder);
   CFRelease(cfKeyData);
 
   return keyError;
@@ -688,7 +687,7 @@ int _libssh2_rsa_new_private_frommemory(libssh2_rsa_ctx ** rsa,
                                         const char *filedata, size_t filedata_len,
                                         unsigned const char *passphrase)
 {
-  CFDataRef keyData = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const unsigned char*)filedata, filedata_len, kCFAllocatorNull);
+  CFDataRef keyData = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, (const unsigned char *)filedata, filedata_len, kCFAllocatorNull);
   int error = _libssh2_new_from_binary_template(rsa, CSSM_KEYCLASS_PRIVATE_KEY, &keyData, _libssh2_pkcs1_rsa_private_key_template);
 
   CFRelease(keyData);
