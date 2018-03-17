@@ -25,6 +25,15 @@
 #define libssh2_sha256_final(ctx, out) CC_SHA256_Final(out, &ctx)
 #define libssh2_sha256(data, datalen, out) CC_SHA256(data, datalen, out)
 
+// SHA512
+#define SHA512_DIGEST_LENGTH CC_SHA512_DIGEST_LENGTH
+
+#define libssh2_sha512_ctx CC_SHA512_CTX
+#define libssh2_sha512_init(ctx) CC_SHA512_Init(ctx)
+#define libssh2_sha512_update(ctx, data, len) CC_SHA512_Update(&ctx, data, len)
+#define libssh2_sha512_final(ctx, out) CC_SHA512_Final(out, &ctx)
+#define libssh2_sha512(data, datalen, out) CC_SHA512(data, datalen, out)
+
 // MD5
 #define LIBSSH2_MD5 1
 #define MD5_DIGEST_LENGTH CC_MD5_DIGEST_LENGTH
