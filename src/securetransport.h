@@ -69,7 +69,7 @@
 extern void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx);
 
 #define LIBSSH2_AES 1
-#define LIBSSH2_AES_CTR 0
+#define LIBSSH2_AES_CTR 1
 #define LIBSSH2_BLOWFISH 1
 #define LIBSSH2_RC4 1
 #define LIBSSH2_CAST 1

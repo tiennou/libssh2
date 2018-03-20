@@ -1315,7 +1315,7 @@ int _libssh2_cipher_init(_libssh2_cipher_ctx *ctx,
       break;
   }
 
-  CCCryptorStatus error = CCCryptorCreateWithMode(encrypt == 1 ? kCCEncrypt : kCCDecrypt, mode, alg, ccNoPadding, iv, secret, keyLength, NULL, 0, 0, 0, ctx);
+  CCCryptorStatus error = CCCryptorCreateWithMode(encrypt == 1 ? kCCEncrypt : kCCDecrypt, mode, alg, ccNoPadding, iv, secret, keyLength, NULL, 0, 0, kCCModeOptionCTR_BE, ctx);
   if (error != kCCSuccess) {
     return 1;
   }
