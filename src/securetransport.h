@@ -122,14 +122,6 @@ typedef void *_libssh2_bn_ctx;
 #define _libssh2_bn_init() CCCreateBigNum(NULL)
 #define _libssh2_bn_init_from_bin() _libssh2_bn_init()
 
-#define _libssh2_bn_rand(bn, bits, top, bottom) \
-do {\
-  if (bn != NULL) CCBigNumFree(bn);\
-  bn = CCBigNumCreateRandom(NULL, bits, bits, 0);\
-} while (0)
-
-#define _libssh2_bn_mod_exp(r, a, power, modulus, ctx) CCBigNumModExp(r, a, power, modulus)
-
 #define _libssh2_bn_set_word(bn, val) \
 do {\
 CCBigNumClear(bn);\
@@ -147,3 +139,29 @@ do {\
 #define _libssh2_bn_bits(bn) CCBigNumBitCount(bn)
 
 #define _libssh2_bn_free(bn) CCBigNumFree(bn)
+
+/*
+ * DH implementation
+ */
+
+typedef struct _libssh2_securetransport_dh {
+    void *bn;
+} _libssh2_securetransport_dh;
+#define _libssh2_dh_ctx _libssh2_securetransport_dh
+extern void _libssh2_securetransport_dh_init(_libssh2_dh_ctx *ctx);
+#define libssh2_dh_init(dhctx) _libssh2_securetransport_dh_init(dhctx)
+
+extern int _libssh2_securetransport_dh_key_pair(_libssh2_dh_ctx *dhctx, _libssh2_bn *public,
+                                                _libssh2_bn *g, _libssh2_bn *p, int group_order,
+                                                _libssh2_bn_ctx *bnctx);
+#define libssh2_dh_key_pair(dhctx, public, g, p, group_order, bnctx) \
+    _libssh2_securetransport_dh_key_pair(dhctx, public, g, p, group_order, bnctx)
+
+extern int _libssh2_securetransport_dh_secret(_libssh2_dh_ctx *dhctx, _libssh2_bn *secret,
+                                              _libssh2_bn *f, _libssh2_bn *p, _libssh2_bn_ctx * bnctx);
+#define libssh2_dh_secret(dhctx, secret, f, p, bnctx) \
+    _libssh2_securetransport_dh_secret(dhctx, secret, f, p, bnctx)
+
+extern void _libssh2_securetransport_dh_dtor(_libssh2_dh_ctx *dhctx);
+#define libssh2_dh_dtor(dhctx) \
+    _libssh2_securetransport_dh_dtor(dhctx)
