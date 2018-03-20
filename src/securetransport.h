@@ -165,3 +165,5 @@ extern int _libssh2_securetransport_dh_secret(_libssh2_dh_ctx *dhctx, _libssh2_b
 extern void _libssh2_securetransport_dh_dtor(_libssh2_dh_ctx *dhctx);
 #define libssh2_dh_dtor(dhctx) \
     _libssh2_securetransport_dh_dtor(dhctx)
+
+#define _libssh2_ec_key void
