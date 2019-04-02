@@ -14,7 +14,7 @@ if [ $ADDRESS_SIZE = '32' ]; then
     sudo apt-get install -y libssl-dev:i386 libgcrypt11-dev:i386 build-essential gcc-multilib
     sudo dpkg --purge --force-depends gcc-multilib && sudo dpkg --purge --force-depends libssl-dev
 
-    export TOOLCHAIN_OPTION="-DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-Linux-32.cmake"
+    export CMAKE_FLAGS="-DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-Linux-32.cmake"
 elif [ $ADDRESS_SIZE = '64' ]; then
     sudo apt-get update -qq
     sudo apt-get install -y libssl-dev
@@ -26,10 +26,10 @@ if [ $CRYPTO_BACKEND = 'mbedTLS' ]; then
 
     curl -L https://github.com/ARMmbed/mbedtls/archive/$MBEDTLSVER.tar.gz | tar -xzf -
     cd mbedtls-$MBEDTLSVER
-    cmake $TOOLCHAIN_OPTION -DUSE_SHARED_MBEDTLS_LIBRARY=ON -DCMAKE_INSTALL_PREFIX:PATH=../usr .
+    cmake $CMAKE_FLAGS -DUSE_SHARED_MBEDTLS_LIBRARY=ON -DCMAKE_INSTALL_PREFIX:PATH=../usr .
     make -j3 install
     cd ..
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/usr/lib;
-    export TOOLCHAIN_OPTION="$TOOLCHAIN_OPTION -DCMAKE_PREFIX_PATH=$PWD/usr";
+    export CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_PREFIX_PATH=$PWD/usr";
 fi

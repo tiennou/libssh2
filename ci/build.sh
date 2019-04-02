@@ -11,7 +11,7 @@ fi
 if [ "$B" = "cmake" ]; then
     mkdir bin
     cd bin
-    cmake $TOOLCHAIN_OPTION \
+    cmake $CMAKE_FLAGS \
         -DCRYPTO_BACKEND=$CRYPTO_BACKEND \
         -DBUILD_SHARED_LIBS=$BUILD_SHARED_LIBS \
         -DENABLE_ZLIB_COMPRESSION=$ENABLE_ZLIB_COMPRESSION ..
