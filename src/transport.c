@@ -160,6 +160,7 @@ static int
 fullpacket(LIBSSH2_SESSION * session, int encrypted /* 1 or 0 */ )
 {
     unsigned char macbuf[MAX_MACSIZE];
+	ssh_buf mac_buf = SSH_BUF_CONST(macbuf, sizeof(macbuf));
     struct transportpacket *p = &session->packet;
     int rc;
     int compressed;
@@ -169,7 +170,9 @@ fullpacket(LIBSSH2_SESSION * session, int encrypted /* 1 or 0 */ )
         session->fullpacket_payload_len = p->packet_length - 1;
 
         if(encrypted) {
-
+			ssh_buf packet = SSH_BUF_CONST(p->init, 5);
+			ssh_buf payload = SSH_BUF_CONST(p->payload,
+											session->fullpacket_payload_len);
             /* Calculate MAC hash */
 			_libssh2_mac_hash(&mac_buf, session->remote.mac_abstract,
 							  session->remote.seqno,

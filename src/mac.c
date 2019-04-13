@@ -64,36 +64,65 @@ static LIBSSH2_MAC_METHOD mac_method_none = {
 };
 #endif /* LIBSSH2_MAC_NONE */
 
+struct _LIBSSH2_MAC_HASHER {
+	LIBSSH2_SESSION *session;
+	const LIBSSH2_MAC_METHOD *method;
+};
+
 /* mac_method_common_init
  * Initialize simple mac methods
  */
 static int
-mac_method_common_init(LIBSSH2_SESSION * session, unsigned char *key,
-                       int *free_key, void **abstract)
+mac_method_common_init(_LIBSSH2_MAC_HASHER **out,
+					   const struct _LIBSSH2_MAC_METHOD *method,
+					   LIBSSH2_SESSION *session, _libssh2_cipher_type(algo),
+					   const ssh_buf *key)
 {
-    *abstract = key;
-    *free_key = 0;
-    (void) session;
+	_LIBSSH2_MAC_HASHER *hash = LIBSSH2_ALLOC(session, sizeof(*hash));
+	if (hash == NULL)
+		return LIBSSH2_ERROR_ALLOC;
+
+	hash->session = session;
+	hash->method = method;
+
+	*out = hash;
 
     return 0;
 }
 
+static int
+mac_method_hash(krypt_buf *buf, _LIBSSH2_MAC_HASHER *hash, uint32_t seqno,
+				const ssh_buf *packet, const ssh_buf *addtl)
+{
+	unsigned char seqno_buf[4];
 
+	_libssh2_htonu32(seqno_buf, seqno);
+
+	return 0;
+}
 
 /* mac_method_common_dtor
  * Cleanup simple mac methods
  */
 static int
-mac_method_common_dtor(LIBSSH2_SESSION * session, void **abstract)
+mac_method_dtor(_LIBSSH2_MAC_HASHER *hash)
 {
-    if(*abstract) {
-        LIBSSH2_FREE(session, *abstract);
-    }
-    *abstract = NULL;
-
+	krypt_digest_cleanup(&hash->md);
+	LIBSSH2_FREE(hash->session, hash);
+	hash->session = NULL;
     return 0;
 }
 
+int _libssh2_mac_hash(ssh_buf *buf, _LIBSSH2_MAC_HASHER *hash,
+					  uint32_t seqno,
+					  const ssh_buf *packet,
+					  const ssh_buf *addtl)
+{
+	if (!hash || !hash->method->hash)
+		return 0;
+
+	return hash->method->hash(buf, hash, seqno, packet, addtl);
+}
 
 
 #if LIBSSH2_HMAC_SHA512
@@ -240,9 +269,15 @@ mac_method_hmac_sha1_96_hash(LIBSSH2_SESSION * session,
                              uint32_t addtl_len, void **abstract)
 {
     unsigned char temp[SHA_DIGEST_LENGTH];
+	ssh_buf tmp = SSH_BUF_CONST(temp, SHA_DIGEST_LENGTH);
+	int error;
+
+	if ((error = mac_method_hash(&tmp, hash, seqno, packet, addtl)) < 0)
+		return error;
 
     mac_method_hmac_sha1_hash(session, temp, seqno, packet, packet_len,
                               addtl, addtl_len, abstract);
+	
     memcpy(buf, (char *) temp, 96 / 8);
 
     return 0;

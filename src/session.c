@@ -907,9 +907,8 @@ session_free(LIBSSH2_SESSION *session)
                                       &session->local.comp_abstract);
         }
         /* mac */
-        if(session->local.mac && session->local.mac->dtor) {
-            session->local.mac->dtor(session, &session->local.mac_abstract);
-        }
+		_libssh2_mac_free(session->local.mac_abstract);
+		session->local.mac_abstract = NULL;
 
         /* Server to Client */
         /* crypt */
@@ -921,9 +920,8 @@ session_free(LIBSSH2_SESSION *session)
                                        &session->remote.comp_abstract);
         }
         /* mac */
-        if(session->remote.mac && session->remote.mac->dtor) {
-            session->remote.mac->dtor(session, &session->remote.mac_abstract);
-        }
+		_libssh2_mac_free(session->remote.mac_abstract);
+		session->remote.mac_abstract = NULL;
 
         /* session_id */
         if(session->session_id) {
