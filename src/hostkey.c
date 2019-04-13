@@ -167,28 +167,25 @@ hostkey_method_ssh_rsa_init(_libssh2_hostkey **out, LIBSSH2_SESSION *session,
     unsigned char *e, *n;
     int e_len, n_len;
 	_libssh2_hostkey *hk;
-	ssh_buf buf;
 	int error;
 
 	if ((error = hostkey_method_init_common(&hk, session, method)) < 0)
 		return error;
 
-    if(hostkey_data->len < 19) {
+    if(hostkey_data->size < 19) {
         _libssh2_debug(session, LIBSSH2_TRACE_ERROR,
                        "host key length too short");
         return -1;
     }
 
-	ssh_buf_init_unowned(&buf, (unsigned char *)hostkey_data, hostkey_data_len);
-
-    if(_libssh2_match_string(&buf, "ssh-rsa") != 0)
+    if(_libssh2_match_string(&hostkey_data, "ssh-rsa") != 0)
         return -1;
 
-    e_len = _libssh2_get_c_string(&buf, &e);
+    e_len = _libssh2_get_c_string(&hostkey_data, &e);
     if(e_len <= 0)
         return -1;
 
-    n_len = _libssh2_get_c_string(&buf, &n);
+    n_len = _libssh2_get_c_string(&hostkey_data, &n);
     if(n_len <= 0)
         return -1;
 
@@ -260,10 +257,10 @@ hostkey_method_ssh_rsa_load(_libssh2_hostkey **out,
  * Verify signature created by remote
  */
 static int
-hostkey_method_verify(_libssh2_hostkey *hk, _libssh2_cipher_type(algo)
+hostkey_method_verify(_libssh2_hostkey *hk, _libssh2_cipher_type(algo),
 					  const ssh_buf *sig, const ssh_buf *m)
 {
-	ssh_buf skip_buf = KRYPT_BUF_INIT;
+	ssh_buf skip_buf = SSH_BUF_INIT;
 
 	/* Skip past keyname_len(4) + keyname(7){"ssh-rsa"} + signature_len(4) */
     if(sig->size < 15)
@@ -271,7 +268,8 @@ hostkey_method_verify(_libssh2_hostkey *hk, _libssh2_cipher_type(algo)
 
 	skip_buf.data = sig->data + 15;
 	skip_buf.size = sig->size - 15;
-	return _libssh2_rsa_sha1_verify(hk->rsa, sig, sig_len, m, m_len);
+	return _libssh2_rsa_sha1_verify(hk->rsa, ssh_buf_ptr(sig), ssh_buf_size(sig),
+									ssh_buf_ptr(m), ssh_buf_size(m));
 }
 
 /*
@@ -283,8 +281,6 @@ static int
 hostkey_method_signv(ssh_buf *out_sig, _libssh2_hostkey *hk,
 					 int veccount, const struct iovec datavec[])
 {
-    libssh2_rsa_ctx *rsactx = (libssh2_rsa_ctx *) (*abstract);
-
 #ifdef _libssh2_rsa_sha1_signv
     return _libssh2_rsa_sha1_signv(session, signature, signature_len,
                                    veccount, datavec, rsactx);
@@ -300,8 +296,8 @@ hostkey_method_signv(ssh_buf *out_sig, _libssh2_hostkey *hk,
     }
     libssh2_sha1_final(ctx, hash);
 
-    ret = _libssh2_rsa_sha1_sign(session, rsactx, hash, SHA_DIGEST_LENGTH,
-                                 signature, signature_len);
+    ret = _libssh2_rsa_sha1_sign(hk->session, hk->rsa, hash, SHA_DIGEST_LENGTH,
+                                 ssh_buf_ptr(out_sig), ssh_buf_available(out_sig));
     if(ret) {
         return -1;
     }
@@ -318,8 +314,8 @@ hostkey_method_signv(ssh_buf *out_sig, _libssh2_hostkey *hk,
 static int
 hostkey_method_dtor(_libssh2_hostkey *hk)
 {
-	krypt_key_free(hk->key);
-	hk->key = NULL;
+	_libssh2_rsa_free(hk->rsa);
+	hk->rsa = NULL;
 	LIBSSH2_FREE(hk->session, hk);
 	hk = NULL;
 
