@@ -64,55 +64,43 @@ static const LIBSSH2_CRYPT_METHOD libssh2_crypt_method_none = {
 };
 #endif /* LIBSSH2_CRYPT_NONE */
 
-struct crypt_ctx
-{
-    int encrypt;
-    _libssh2_cipher_type(algo);
-    _libssh2_cipher_ctx h;
-};
-
 static int
-crypt_init(LIBSSH2_SESSION * session,
-           const LIBSSH2_CRYPT_METHOD * method,
-           unsigned char *iv, int *free_iv,
-           unsigned char *secret, int *free_secret,
-           int encrypt, void **abstract)
+crypt_init(_LIBSSH2_CRYPTOR **out, LIBSSH2_SESSION *session,
+           const LIBSSH2_CRYPT_METHOD *method,
+           const ssh_buf *iv, const ssh_buf *key,
+           int encrypt)
 {
-    struct crypt_ctx *ctx = LIBSSH2_ALLOC(session,
-                                          sizeof(struct crypt_ctx));
-    if(!ctx)
+    _LIBSSH2_CRYPTOR *cryptor = LIBSSH2_ALLOC(session, sizeof(*cryptor));
+    if(!cryptor)
         return LIBSSH2_ERROR_ALLOC;
 
-    ctx->encrypt = encrypt;
-    ctx->algo = method->algo;
-    if(_libssh2_cipher_init(&ctx->h, ctx->algo, iv, secret, encrypt)) {
-        LIBSSH2_FREE(session, ctx);
+	cryptor->session = session;
+	cryptor->method = method;
+	cryptor->algo = method->algo;
+	cryptor->encrypt = encrypt;
+
+    if(_libssh2_cipher_init(&cryptor->h, cryptor->algo, iv, key, cryptor->encrypt)) {
+        LIBSSH2_FREE(session, cryptor);
         return -1;
     }
-    *abstract = ctx;
-    *free_iv = 1;
-    *free_secret = 1;
+    *out = cryptor;
     return 0;
 }
 
 static int
-crypt_encrypt(LIBSSH2_SESSION * session, unsigned char *block,
-              size_t blocksize, void **abstract)
+crypt_encrypt(ssh_buf *out, _LIBSSH2_CRYPTOR *cryptor, const ssh_buf *block)
 {
-    struct crypt_ctx *cctx = *(struct crypt_ctx **) abstract;
-    (void) session;
-    return _libssh2_cipher_crypt(&cctx->h, cctx->algo, cctx->encrypt, block,
-                                 blocksize);
+	return _libssh2_cipher_crypt(&cryptor->h, cryptor->algo, cryptor->encrypt,
+								 block, cryptor->method->blocksize);
 }
 
 static int
-crypt_dtor(LIBSSH2_SESSION * session, void **abstract)
+crypt_dtor(_LIBSSH2_CRYPTOR *cryptor)
 {
-    struct crypt_ctx **cctx = (struct crypt_ctx **) abstract;
-    if(cctx && *cctx) {
-        _libssh2_cipher_dtor(&(*cctx)->h);
-        LIBSSH2_FREE(session, *cctx);
-        *abstract = NULL;
+    if(cryptor) {
+		_libssh2_cipher_dtor(&cryptor->h);
+        LIBSSH2_FREE(cryptor->session, cryptor);
+        cryptor = NULL;
     }
     return 0;
 }
@@ -244,23 +232,22 @@ static const LIBSSH2_CRYPT_METHOD libssh2_crypt_method_arcfour = {
 };
 
 static int
-crypt_init_arcfour128(LIBSSH2_SESSION * session,
-                      const LIBSSH2_CRYPT_METHOD * method,
-                      unsigned char *iv, int *free_iv,
-                      unsigned char *secret, int *free_secret,
-                      int encrypt, void **abstract)
+crypt_init_arcfour128(_LIBSSH2_CRYPTOR **out,
+					  LIBSSH2_SESSION *session,
+					  const LIBSSH2_CRYPT_METHOD *method,
+					  const ssh_buf *iv,
+					  const ssh_buf *key,
+					  int encrypt)
 {
     int rc;
 
-    rc = crypt_init(session, method, iv, free_iv, secret, free_secret,
-                    encrypt, abstract);
+	rc = crypt_init(out, session, method, iv, key, encrypt);
     if(rc == 0) {
-        struct crypt_ctx *cctx = *(struct crypt_ctx **) abstract;
         unsigned char block[8];
         size_t discard = 1536;
+		ssh_buf block_buf = SSH_BUF_CONST(block, sizeof(block));
         for(; discard; discard -= 8)
-            _libssh2_cipher_crypt(&cctx->h, cctx->algo, cctx->encrypt, block,
-                                  method->blocksize);
+			_libssh2_cryptor_update(&block_buf, *out, &block_buf);
     }
 
     return rc;
@@ -346,4 +333,29 @@ const LIBSSH2_CRYPT_METHOD **
 libssh2_crypt_methods(void)
 {
     return _libssh2_crypt_methods;
+}
+
+int _libssh2_cryptor_init(_LIBSSH2_CRYPTOR **cryptor, LIBSSH2_SESSION *session,
+						 const LIBSSH2_CRYPT_METHOD *method,
+						 const ssh_buf *iv, const ssh_buf *key,
+						 int encrypt)
+{
+	if (!method->init)
+		return 0;
+	return method->init(cryptor, session, method, iv, key, encrypt);
+}
+
+int _libssh2_cryptor_update(ssh_buf *out, _LIBSSH2_CRYPTOR *cryptor, const ssh_buf *block)
+{
+	if (!cryptor || !cryptor->method->update) {
+		return 0;
+	}
+	return cryptor->method->update(out, cryptor, block);
+}
+
+int _libssh2_cryptor_free(_LIBSSH2_CRYPTOR *cryptor)
+{
+	if (!cryptor || !cryptor->method->dtor)
+		return 0;
+	return cryptor->method->dtor(cryptor);
 }

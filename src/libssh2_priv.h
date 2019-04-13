@@ -476,6 +476,7 @@ struct _LIBSSH2_LISTENER
     size_t chanFwdCncl_data_len;
 };
 
+typedef struct _LIBSSH2_CRYPTOR _LIBSSH2_CRYPTOR;
 typedef struct _libssh2_endpoint_data
 {
     unsigned char *banner;
@@ -484,7 +485,7 @@ typedef struct _libssh2_endpoint_data
     size_t kexinit_len;
 
     const LIBSSH2_CRYPT_METHOD *crypt;
-    void *crypt_abstract;
+    _LIBSSH2_CRYPTOR *crypt_abstract;
 
     const struct _LIBSSH2_MAC_METHOD *mac;
     uint32_t seqno;
@@ -919,16 +920,33 @@ struct _LIBSSH2_CRYPT_METHOD
 
     long flags;
 
-    int (*init) (LIBSSH2_SESSION * session,
-                 const LIBSSH2_CRYPT_METHOD * method, unsigned char *iv,
-                 int *free_iv, unsigned char *secret, int *free_secret,
-                 int encrypt, void **abstract);
-    int (*crypt) (LIBSSH2_SESSION * session, unsigned char *block,
-                  size_t blocksize, void **abstract);
-    int (*dtor) (LIBSSH2_SESSION * session, void **abstract);
+    int (*init) (_LIBSSH2_CRYPTOR **cryptor, LIBSSH2_SESSION *session,
+                 const LIBSSH2_CRYPT_METHOD *method,
+				 const ssh_buf *iv, const ssh_buf *key,
+                 int encrypt);
+    int (*update) (ssh_buf *out, _LIBSSH2_CRYPTOR *cryptor,
+				   const ssh_buf *block);
+    int (*dtor) (_LIBSSH2_CRYPTOR *cryptor);
 
       _libssh2_cipher_type(algo);
 };
+
+struct _LIBSSH2_CRYPTOR
+{
+	LIBSSH2_SESSION *session;
+	const struct _LIBSSH2_CRYPT_METHOD *method;
+	int encrypt;
+	_libssh2_cipher_ctx h;
+	_libssh2_cipher_type(algo);
+};
+
+int _libssh2_cryptor_init(_LIBSSH2_CRYPTOR **cryptor, LIBSSH2_SESSION *session,
+						  const LIBSSH2_CRYPT_METHOD *method,
+						  const ssh_buf *iv, const ssh_buf *key,
+						  int encrypt);
+int _libssh2_cryptor_update(ssh_buf *out, _LIBSSH2_CRYPTOR *cryptor,
+							const ssh_buf *block);
+int _libssh2_cryptor_free(_LIBSSH2_CRYPTOR *cryptor);
 
 struct _LIBSSH2_COMP_METHOD
 {
