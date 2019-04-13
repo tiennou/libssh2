@@ -947,7 +947,7 @@ out:
 
 static int
 gen_publickey_from_rsa_openssh_priv_data(LIBSSH2_SESSION *session,
-                                         struct string_buf *decrypted,
+                                         ssh_buf *decrypted,
                                          unsigned char **method,
                                          size_t *method_len,
                                          unsigned char **pubkeydata,
@@ -1065,7 +1065,7 @@ _libssh2_rsa_new_openssh_private(libssh2_rsa_ctx ** rsa,
     FILE *fp;
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1274,7 +1274,7 @@ gen_publickey_from_dsa_evp(LIBSSH2_SESSION *session,
 
 static int
 gen_publickey_from_dsa_openssh_priv_data(LIBSSH2_SESSION *session,
-                                         struct string_buf *decrypted,
+                                         ssh_buf *decrypted,
                                          unsigned char **method,
                                          size_t *method_len,
                                          unsigned char **pubkeydata,
@@ -1372,7 +1372,7 @@ _libssh2_dsa_new_openssh_private(libssh2_dsa_ctx ** dsa,
     FILE *fp;
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1585,7 +1585,7 @@ cleanExit:
 
 static int
 gen_publickey_from_ed25519_openssh_priv_data(LIBSSH2_SESSION *session,
-                                             struct string_buf *decrypted,
+                                             ssh_buf *decrypted,
                                              unsigned char **method,
                                              size_t *method_len,
                                              unsigned char **pubkeydata,
@@ -1745,7 +1745,7 @@ _libssh2_ed25519_new_private(libssh2_ed25519_ctx ** ed_ctx,
     int rc;
     FILE *fp;
     unsigned char *buf;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
     libssh2_ed25519_ctx *ctx = NULL;
 
     if(session == NULL) {
@@ -2355,7 +2355,7 @@ clean_exit:
 static int
 gen_publickey_from_ecdsa_openssh_priv_data(LIBSSH2_SESSION *session,
                                            libssh2_curve_type curve_type,
-                                           struct string_buf *decrypted,
+                                           ssh_buf *decrypted,
                                            unsigned char **method,
                                            size_t *method_len,
                                            unsigned char **pubkeydata,
@@ -2451,7 +2451,7 @@ _libssh2_ecdsa_new_openssh_private(libssh2_ecdsa_ctx ** ec_ctx,
     int rc;
     unsigned char *buf = NULL;
     libssh2_curve_type type;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2824,7 +2824,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
 {
     FILE *fp;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
     int rc = 0;
 
     if(session == NULL) {
@@ -3021,7 +3021,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 {
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh_buf *decrypted = NULL;
 
     if(key_ctx != NULL)
         *key_ctx = NULL;

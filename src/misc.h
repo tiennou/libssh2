@@ -49,11 +49,15 @@ struct list_node {
     struct list_head *head;
 };
 
-struct string_buf {
+typedef struct ssh_buf {
     unsigned char *data;
     unsigned char *dataptr;
     size_t len;
-};
+} ssh_buf;
+
+#define SSH_BUF_INIT { NULL, NULL, 0 }
+#define SSH_BUF_CONST(data, size) { data, NULL, size }
+#define SSH_BUF_CTSTR(str) { str, NULL, strlen(str) }
 
 int _libssh2_error_flags(LIBSSH2_SESSION* session, int errcode,
                          const char *errmsg, int errflags);
@@ -88,15 +92,15 @@ void _libssh2_store_str(unsigned char **buf, const char *str, size_t len);
 void *_libssh2_calloc(LIBSSH2_SESSION *session, size_t size);
 void _libssh2_explicit_zero(void *buf, size_t size);
 
-struct string_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session);
+ssh_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session);
 void _libssh2_string_buf_free(LIBSSH2_SESSION *session,
-                              struct string_buf *buf);
-int _libssh2_get_u32(struct string_buf *buf, uint32_t *out);
-int _libssh2_get_u64(struct string_buf *buf, libssh2_uint64_t *out);
-int _libssh2_match_string(struct string_buf *buf, const char *match);
-int _libssh2_get_c_string(struct string_buf *buf, unsigned char **outbuf);
-int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf);
-int _libssh2_check_length(struct string_buf *buf, size_t requested_len);
+                              ssh_buf *buf);
+int _libssh2_get_u32(ssh_buf *buf, uint32_t *out);
+int _libssh2_get_u64(ssh_buf *buf, libssh2_uint64_t *out);
+int _libssh2_match_string(ssh_buf *buf, const char *match);
+int _libssh2_get_c_string(ssh_buf *buf, unsigned char **outbuf);
+int _libssh2_get_bignum_bytes(ssh_buf *buf, unsigned char **outbuf);
+int _libssh2_check_length(ssh_buf *buf, size_t requested_len);
 
 #if defined(LIBSSH2_WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN__)
 /* provide a private one */

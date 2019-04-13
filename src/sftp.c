@@ -678,7 +678,7 @@ static int
 sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
               size_t data_len)
 {
-    struct string_buf buf;
+    ssh_buf buf;
     uint32_t flags = 0;
     buf.data = (unsigned char *)p;
     buf.dataptr = buf.data;
@@ -768,7 +768,7 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
     size_t data_len;
     ssize_t rc;
     LIBSSH2_SFTP *sftp_handle;
-    struct string_buf buf;
+    ssh_buf buf;
     unsigned char *endp;
 
     if(session->sftpInit_state == libssh2_NB_state_idle) {

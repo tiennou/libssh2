@@ -66,7 +66,7 @@ hostkey_method_ssh_rsa_init(LIBSSH2_SESSION * session,
     libssh2_rsa_ctx *rsactx;
     unsigned char *e, *n;
     int e_len, n_len;
-    struct string_buf buf;
+    ssh_buf buf;
 
     if(*abstract) {
         hostkey_method_ssh_rsa_dtor(session, abstract);
@@ -286,7 +286,7 @@ hostkey_method_ssh_dss_init(LIBSSH2_SESSION * session,
     libssh2_dsa_ctx *dsactx;
     unsigned char *p, *q, *g, *y;
     int p_len, q_len, g_len, y_len;
-    struct string_buf buf;
+    ssh_buf buf;
 
     if(*abstract) {
         hostkey_method_ssh_dss_dtor(session, abstract);
@@ -514,7 +514,7 @@ hostkey_method_ssh_ecdsa_init(LIBSSH2_SESSION * session,
     unsigned char *type_str, *domain, *public_key;
     int key_len;
     libssh2_curve_type type;
-    struct string_buf buf;
+    ssh_buf buf;
 
     if(abstract != NULL && *abstract) {
         hostkey_method_ssh_ecdsa_dtor(session, abstract);
@@ -654,7 +654,7 @@ hostkey_method_ssh_ecdsa_sig_verify(LIBSSH2_SESSION * session,
 {
     unsigned char *r, *s, *name;
     unsigned int r_len, s_len, len;
-    struct string_buf buf;
+    ssh_buf buf;
     libssh2_ecdsa_ctx *ctx = (libssh2_ecdsa_ctx *) (*abstract);
 
     (void) session;

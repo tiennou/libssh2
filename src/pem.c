@@ -363,10 +363,10 @@ static int
 _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
                                 const unsigned char *passphrase,
                                 const char *b64data, size_t b64datalen,
-                                struct string_buf **decrypted_buf)
+                                ssh_buf **decrypted_buf)
 {
     const LIBSSH2_CRYPT_METHOD *method = NULL;
-    struct string_buf decoded, decrypted, kdf_buf;
+    ssh_buf decoded, decrypted, kdf_buf;
     unsigned char *ciphername = NULL;
     unsigned char *kdfname = NULL;
     unsigned char *kdf = NULL;
@@ -610,7 +610,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
 
     if(decrypted_buf != NULL) {
         /* copy data to out-going buffer */
-        struct string_buf *out_buf = _libssh2_string_buf_new(session);
+        ssh_buf *out_buf = _libssh2_string_buf_new(session);
         if(!out_buf) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Unable to allocate memory for "
@@ -660,7 +660,7 @@ out:
 int
 _libssh2_openssh_pem_parse(LIBSSH2_SESSION * session,
                            const unsigned char *passphrase,
-                           FILE * fp, struct string_buf **decrypted_buf)
+                           FILE * fp, ssh_buf **decrypted_buf)
 {
     char line[LINE_SIZE];
     char *b64data = NULL;
@@ -730,7 +730,7 @@ int
 _libssh2_openssh_pem_parse_memory(LIBSSH2_SESSION * session,
                                   const unsigned char *passphrase,
                                   const char *filedata, size_t filedata_len,
-                                  struct string_buf **decrypted_buf)
+                                  ssh_buf **decrypted_buf)
 {
     char line[LINE_SIZE];
     char *b64data = NULL;

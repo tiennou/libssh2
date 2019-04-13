@@ -1703,7 +1703,7 @@ kex_method_diffie_hellman_group_exchange_sha1_key_exchange
     if(key_state->state == libssh2_NB_state_sent1) {
         unsigned int p_len, g_len;
         unsigned char *p, *g;
-        struct string_buf buf;
+        ssh_buf buf;
 
         if(key_state->data_len < 9) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1832,7 +1832,7 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
     if(key_state->state == libssh2_NB_state_sent1) {
         unsigned char *p, *g;
         unsigned long p_len, g_len;
-        struct string_buf buf;
+        ssh_buf buf;
 
         if(key_state->data_len < 9) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2676,7 +2676,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         /* parse INIT reply data */
         unsigned char *server_public_key, *server_host_key;
         unsigned int server_public_key_len;
-        struct string_buf buf;
+        ssh_buf buf;
 
         if(data_len < 5) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
