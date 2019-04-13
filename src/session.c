@@ -898,10 +898,9 @@ session_free(LIBSSH2_SESSION *session)
 
         /* Client to Server */
         /* crypt */
-        if(session->local.crypt && session->local.crypt->dtor) {
-            session->local.crypt->dtor(session,
-                                       &session->local.crypt_abstract);
-        }
+		_libssh2_cryptor_free(session->local.crypt_abstract);
+		session->local.crypt_abstract = NULL;
+
         /* comp */
         if(session->local.comp && session->local.comp->dtor) {
             session->local.comp->dtor(session, 1,
@@ -914,10 +913,8 @@ session_free(LIBSSH2_SESSION *session)
 
         /* Server to Client */
         /* crypt */
-        if(session->remote.crypt && session->remote.crypt->dtor) {
-            session->remote.crypt->dtor(session,
-                                        &session->remote.crypt_abstract);
-        }
+		_libssh2_cryptor_free(session->remote.crypt_abstract);
+
         /* comp */
         if(session->remote.comp && session->remote.comp->dtor) {
             session->remote.comp->dtor(session, 0,

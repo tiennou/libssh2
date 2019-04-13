@@ -204,11 +204,11 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
 
     if(method) {
         /* Set up decryption */
-        int free_iv = 0, free_secret = 0, len_decrypted = 0, padding = 0;
         int blocksize = method->blocksize;
-        void *abstract;
         unsigned char secret[2*MD5_DIGEST_LENGTH];
         libssh2_md5_ctx fingerprint_ctx;
+		int len_decrypted = 0, padding = 0;
+        _LIBSSH2_CRYPTOR *cryptor;
 
         /* Perform key derivation (PBKDF1/MD5) */
         if(!libssh2_md5_init(&fingerprint_ctx)) {
@@ -232,22 +232,19 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
         }
 
         /* Initialize the decryption */
-        if(method->init(session, method, iv, &free_iv, secret,
-                         &free_secret, 0, &abstract)) {
+		ssh_buf iv_buf = SSH_BUF_CONST(iv, method->iv_len);
+		ssh_buf key_buf = SSH_BUF_CONST(secret, method->blocksize);
+
+		if(_libssh2_cryptor_init(&cryptor, session, method, &iv_buf, &key_buf, 0) < 0) {
             _libssh2_explicit_zero((char *)secret, sizeof(secret));
             LIBSSH2_FREE(session, data);
             ret = -1;
             goto out;
         }
 
-        if(free_secret) {
-            _libssh2_explicit_zero((char *)secret, sizeof(secret));
-        }
-
         /* Do the actual decryption */
-        if((*datalen % blocksize) != 0) {
-            _libssh2_explicit_zero((char *)secret, sizeof(secret));
-            method->dtor(session, &abstract);
+		if((*datalen % blocksize) != 0) {
+			_libssh2_cryptor_free(cryptor);
             _libssh2_explicit_zero(*data, *datalen);
             LIBSSH2_FREE(session, *data);
             ret = -1;
@@ -255,11 +252,11 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
         }
 
         while(len_decrypted <= (int)*datalen - blocksize) {
-            if(method->crypt(session, *data + len_decrypted, blocksize,
-                              &abstract)) {
+			ssh_buf out_buf = SSH_BUF_INIT;
+			ssh_buf data_buf = SSH_BUF_CONST(*data + len_decrypted, blocksize);
+			if(_libssh2_cryptor_update(&out_buf, cryptor, &data_buf) < 0) {
                 ret = LIBSSH2_ERROR_DECRYPT;
-                _libssh2_explicit_zero((char *)secret, sizeof(secret));
-                method->dtor(session, &abstract);
+				_libssh2_cryptor_free(cryptor);
                 _libssh2_explicit_zero(*data, *datalen);
                 LIBSSH2_FREE(session, *data);
                 goto out;
@@ -274,8 +271,7 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
         *datalen -= padding;
 
         /* Clean up */
-        _libssh2_explicit_zero((char *)secret, sizeof(secret));
-        method->dtor(session, &abstract);
+		_libssh2_cryptor_free(cryptor);
     }
 
     ret = 0;
@@ -503,9 +499,9 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     }
 
     if(method) {
-        int free_iv = 0, free_secret = 0, len_decrypted = 0;
+        int len_decrypted = 0;
         int blocksize;
-        void *abstract = NULL;
+		_LIBSSH2_CRYPTOR *cryptor;
 
         keylen = method->secret_len;
         ivlen = method->iv_len;
@@ -566,26 +562,29 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         memcpy(key_part, key, keylen);
         memcpy(iv_part, key + keylen, ivlen);
 
+		ssh_buf iv_buf = SSH_BUF_CONST(iv_part, ivlen);
+		ssh_buf key_buf = SSH_BUF_CONST(key_part, keylen);
+
         /* Initialize the decryption */
-        if(method->init(session, method, iv_part, &free_iv, key_part,
-                         &free_secret, 0, &abstract)) {
+		if(_libssh2_cryptor_init(&cryptor, session, method, &iv_buf, &key_buf, 0) < 0) {
             ret = LIBSSH2_ERROR_DECRYPT;
             goto out;
         }
 
         /* Do the actual decryption */
         if((decrypted.size % blocksize) != 0) {
-            method->dtor(session, &abstract);
+			_libssh2_cryptor_free(cryptor);
             ret = LIBSSH2_ERROR_DECRYPT;
             goto out;
         }
 
         while((size_t)len_decrypted <= decrypted.size - blocksize) {
-            if(method->crypt(session, decrypted.data + len_decrypted,
-                             blocksize,
-                             &abstract)) {
+			ssh_buf out = SSH_BUF_INIT;
+			ssh_buf block = SSH_BUF_CONST(decrypted.data + len_decrypted,
+										  blocksize);
+			if(_libssh2_cryptor_update(&out, cryptor, &block) < 0) {
                 ret = LIBSSH2_ERROR_DECRYPT;
-                method->dtor(session, &abstract);
+				_libssh2_cryptor_free(cryptor);
                 goto out;
             }
 
@@ -593,8 +592,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         }
 
         /* No padding */
-
-        method->dtor(session, &abstract);
+		_libssh2_cryptor_free(cryptor);
     }
 
     /* Check random bytes match */

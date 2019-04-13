@@ -864,8 +864,8 @@ int _libssh2_transport_send(LIBSSH2_SESSION *session,
 
         /* Encrypt the whole packet data, one block size at a time.
            The MAC field is not encrypted. */
-        for(i = 0; i < packet_length; i += session->local.crypt->opts.block_len) {
-			ssh_buf packet = string_buf_CONST(p->outbuf + i, session->local.crypt->opts.block_len);
+        for(i = 0; i < packet_length; i += session->local.crypt->blocksize) {
+			ssh_buf packet = SSH_BUF_CONST(p->outbuf + i, session->local.crypt->blocksize);
 			if(_libssh2_cryptor_update(&packet, session->local.crypt_abstract, &packet));
                 return LIBSSH2_ERROR_ENCRYPT;     /* encryption failure */
         }
