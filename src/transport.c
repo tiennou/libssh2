@@ -139,16 +139,11 @@ decrypt(LIBSSH2_SESSION * session, unsigned char *source,
     assert((len % blocksize) == 0);
 
     while(len >= blocksize) {
-        if(session->remote.crypt->crypt(session, source, blocksize,
-                                         &session->remote.crypt_abstract)) {
+		if(_libssh2_cryptor_update(&dst_buf, session->remote.crypt_abstract,
+								   &src_buf) < 0) {
             LIBSSH2_FREE(session, p->payload);
             return LIBSSH2_ERROR_DECRYPT;
         }
-
-        /* if the crypt() function would write to a given address it
-           wouldn't have to memcpy() and we could avoid this memcpy()
-           too */
-        memcpy(dest, source, blocksize);
 
         len -= blocksize;       /* less bytes left */
         dest += blocksize;      /* advance write pointer */
@@ -176,12 +171,10 @@ fullpacket(LIBSSH2_SESSION * session, int encrypted /* 1 or 0 */ )
         if(encrypted) {
 
             /* Calculate MAC hash */
-            session->remote.mac->hash(session, macbuf,  /* store hash here */
-                                      session->remote.seqno,
-                                      p->init, 5,
-                                      p->payload,
-                                      session->fullpacket_payload_len,
-                                      &session->remote.mac_abstract);
+			_libssh2_mac_hash(&mac_buf, session->remote.mac_abstract,
+							  session->remote.seqno,
+							  &packet,
+							  &payload);
 
             /* Compare the calculated hash with the MAC we just read from
              * the network. The read one is at the very end of the payload
@@ -866,18 +859,14 @@ int _libssh2_transport_send(LIBSSH2_SESSION *session,
            since that size includes the whole packet. The MAC is
            calculated on the entire unencrypted packet, including all
            fields except the MAC field itself. */
-        session->local.mac->hash(session, p->outbuf + packet_length,
-                                 session->local.seqno, p->outbuf,
-                                 packet_length, NULL, 0,
-                                 &session->local.mac_abstract);
+		_libssh2_mac_hash(&mac_buf, session->local.mac_abstract,
+						  session->local.seqno, &packet, NULL);
 
         /* Encrypt the whole packet data, one block size at a time.
            The MAC field is not encrypted. */
-        for(i = 0; i < packet_length; i += session->local.crypt->blocksize) {
-            unsigned char *ptr = &p->outbuf[i];
-            if(session->local.crypt->crypt(session, ptr,
-                                            session->local.crypt->blocksize,
-                                            &session->local.crypt_abstract))
+        for(i = 0; i < packet_length; i += session->local.crypt->opts.block_len) {
+			ssh_buf packet = string_buf_CONST(p->outbuf + i, session->local.crypt->opts.block_len);
+			if(_libssh2_cryptor_update(&packet, session->local.crypt_abstract, &packet));
                 return LIBSSH2_ERROR_ENCRYPT;     /* encryption failure */
         }
     }
