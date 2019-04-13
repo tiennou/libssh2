@@ -86,53 +86,15 @@
         }                                                               \
     }                                                                   \
 
-
-#define LIBSSH2_KEX_METHOD_SHA_VALUE_HASH(digest_type, value,           \
-                                          reqlen, version)              \
-{                                                                       \
-    libssh2_sha##digest_type##_ctx hash;                                \
-    unsigned long len = 0;                                              \
-    if(!(value)) {                                                      \
-        value = LIBSSH2_ALLOC(session,                                  \
-                              reqlen + SHA##digest_type##_DIGEST_LENGTH); \
-    }                                                                   \
-    if(value)                                                           \
-        while(len < (unsigned long)reqlen) {                            \
-            libssh2_sha##digest_type##_init(&hash);                     \
-            libssh2_sha##digest_type##_update(hash,                     \
-                                              exchange_state->k_value,  \
-                                              exchange_state->k_value_len); \
-            libssh2_sha##digest_type##_update(hash,                     \
-                                              exchange_state->h_sig_comp, \
-                                         SHA##digest_type##_DIGEST_LENGTH); \
-            if(len > 0) {                                               \
-                libssh2_sha##digest_type##_update(hash, value, len);    \
-            }                                                           \
-            else {                                                      \
-                libssh2_sha##digest_type##_update(hash, (version), 1);  \
-                libssh2_sha##digest_type##_update(hash, session->session_id, \
-                                                  session->session_id_len); \
-            }                                                           \
-            libssh2_sha##digest_type##_final(hash, (value) + len);      \
-            len += SHA##digest_type##_DIGEST_LENGTH;                    \
-        }                                                               \
-}
-
-
-/*
- * diffie_hellman_sha1
- *
- * Diffie Hellman Key Exchange, Group Agnostic
- */
 static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
-                               _libssh2_bn *g,
-                               _libssh2_bn *p,
-                               int group_order,
-                               unsigned char packet_type_init,
-                               unsigned char packet_type_reply,
-                               unsigned char *midhash,
-                               unsigned long midhash_len,
-                               kmdhgGPshakex_state_t *exchange_state)
+							   _libssh2_bn *g,
+							   _libssh2_bn *p,
+							   int group_order,
+							   unsigned char packet_type_init,
+							   unsigned char packet_type_reply,
+							   unsigned char *midhash,
+							   unsigned long midhash_len,
+							   kmdhgGPshakex_state_t *exchange_state)
 {
     int ret = 0;
     int rc;
@@ -1062,9 +1024,11 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
         }
 #endif /* LIBSSH2DEBUG */
 
-        if(session->hostkey->init(session, session->server_hostkey,
-                                   session->server_hostkey_len,
-                                   &session->server_hostkey_abstract)) {
+		ssh_buf server_hostkey = SSH_BUF_CONST(session->server_hostkey,
+											   session->server_hostkey_len);
+
+		if(_libssh2_hostkey_init(&session->server_hostkey_abstract, session,
+								 session->hostkey, server_hostkey) < 0) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unable to initialize hostkey importer");
             goto clean_exit;
@@ -1205,17 +1169,14 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
         libssh2_sha256_final(exchange_hash_ctx,
                              exchange_state->h_sig_comp);
 
-        if(session->hostkey->
-           sig_verify(session, exchange_state->h_sig,
-                      exchange_state->h_sig_len, exchange_state->h_sig_comp,
-                      SHA256_DIGEST_LENGTH,
-                      &session->server_hostkey_abstract)) {
+		ssh_buf sig = SSH_BUF_CONST(exchange_state->h_sig, exchange_state->h_sig_len);
+		ssh_buf comp = SSH_BUF_CONST(exchange_state->h_sig_comp, SHA256_DIGEST_LENGTH);
+
+        if(_libssh2_hostkey_verify(session->server_hostkey_abstract, algo, &sig, &comp) < 0) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_SIGN,
                                  "Unable to verify hostkey signature");
             goto clean_exit;
         }
-
-
 
         _libssh2_debug(session, LIBSSH2_TRACE_KEX, "Sending NEWKEYS message");
         exchange_state->c = SSH_MSG_NEWKEYS;
@@ -1331,6 +1292,8 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
         }
 
         if(session->remote.crypt->init) {
+			ssh_buf iv_buf = SSH_BUF_INIT;
+			ssh_buf key_buf = SSH_BUF_INIT;
             unsigned char *iv = NULL, *secret = NULL;
             int free_iv = 0, free_secret = 0;
 
@@ -3655,7 +3618,7 @@ static int kex_agree_hostkey(LIBSSH2_SESSION * session,
                     /* Either this hostkey can do encryption or this kex just
                        doesn't require it */
                     if(((kex_flags & LIBSSH2_KEX_METHOD_FLAG_REQ_SIGN_HOSTKEY)
-                         == 0) || (method->sig_verify)) {
+                         == 0) || (method->verify)) {
                         /* Either this hostkey can do signing or this kex just
                            doesn't require it */
                         session->hostkey = method;
@@ -3681,7 +3644,7 @@ static int kex_agree_hostkey(LIBSSH2_SESSION * session,
                 /* Either this hostkey can do encryption or this kex just
                    doesn't require it */
                 if(((kex_flags & LIBSSH2_KEX_METHOD_FLAG_REQ_SIGN_HOSTKEY) ==
-                     0) || ((*hostkeyp)->sig_verify)) {
+                     0) || ((*hostkeyp)->verify)) {
                     /* Either this hostkey can do signing or this kex just
                        doesn't require it */
                     session->hostkey = *hostkeyp;
@@ -4082,10 +4045,8 @@ _libssh2_kex_exchange(LIBSSH2_SESSION * session, int reexchange,
         if(reexchange) {
             session->kex = NULL;
 
-            if(session->hostkey && session->hostkey->dtor) {
-                session->hostkey->dtor(session,
-                                       &session->server_hostkey_abstract);
-            }
+			_libssh2_hostkey_free(session->server_hostkey_abstract);
+			session->server_hostkey_abstract = NULL;
             session->hostkey = NULL;
         }
 

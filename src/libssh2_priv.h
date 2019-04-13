@@ -575,6 +575,8 @@ struct flags {
     int compress; /* LIBSSH2_FLAG_COMPRESS */
 };
 
+typedef struct _libssh2_hostkey _libssh2_hostkey;
+
 struct _LIBSSH2_SESSION
 {
     /* Memory management callbacks */
@@ -616,7 +618,7 @@ struct _LIBSSH2_SESSION
 
     /* Server's public key */
     const LIBSSH2_HOSTKEY_METHOD *hostkey;
-    void *server_hostkey_abstract;
+	_libssh2_hostkey *server_hostkey_abstract;
 
     /* Either set with libssh2_session_hostkey() (for server mode)
      * Or read from server in (eg) KEXDH_INIT (for client mode)
@@ -883,30 +885,57 @@ struct _LIBSSH2_KEX_METHOD
     long flags;
 };
 
+struct _LIBSSH2_HOSTKEY_METHOD;
+
+int _libssh2_hostkey_init(_libssh2_hostkey **out, LIBSSH2_SESSION *session,
+						  const struct _LIBSSH2_HOSTKEY_METHOD *method,
+						  ssh_buf *hostkey_data);
+int _libssh2_hostkey_read(_libssh2_hostkey **out, LIBSSH2_SESSION *session,
+						  const struct _LIBSSH2_HOSTKEY_METHOD *method,
+						  const char *privkeyfile,
+						  const ssh_buf *passphrase);
+int _libssh2_hostkey_load(_libssh2_hostkey **out, LIBSSH2_SESSION *session,
+						  const struct _LIBSSH2_HOSTKEY_METHOD *method,
+						  const ssh_buf *private_data,
+						  const ssh_buf *passphrase);
+int _libssh2_hostkey_verify(_libssh2_hostkey *hash, _libssh2_cipher_type(algo),
+							const ssh_buf *sig, const ssh_buf *m);
+int _libssh2_hostkey_sign(ssh_buf *out_sig, _libssh2_hostkey *hash,
+						  const ssh_buf *data);
+int _libssh2_hostkey_signv(ssh_buf *out_sig, _libssh2_hostkey *hash,
+						   int veccount, const struct iovec datavec[]);
+int _libssh2_hostkey_encrypt(ssh_buf *dst, _libssh2_hostkey *hash,
+							 const ssh_buf *src);
+int _libssh2_hostkey_decrypt(ssh_buf *dst, _libssh2_hostkey *hash,
+							 const ssh_buf *src);
+int _libssh2_hostkey_free(_libssh2_hostkey *hash);
+
 struct _LIBSSH2_HOSTKEY_METHOD
 {
     const char *name;
     unsigned long hash_len;
 
-    int (*init) (LIBSSH2_SESSION * session, const unsigned char *hostkey_data,
-                 size_t hostkey_data_len, void **abstract);
-    int (*initPEM) (LIBSSH2_SESSION * session, const char *privkeyfile,
-                    unsigned const char *passphrase, void **abstract);
-    int (*initPEMFromMemory) (LIBSSH2_SESSION * session,
-                              const char *privkeyfiledata,
-                              size_t privkeyfiledata_len,
-                              unsigned const char *passphrase,
-                              void **abstract);
-    int (*sig_verify) (LIBSSH2_SESSION * session, const unsigned char *sig,
-                       size_t sig_len, const unsigned char *m,
-                       size_t m_len, void **abstract);
-    int (*signv) (LIBSSH2_SESSION * session, unsigned char **signature,
-                  size_t *signature_len, int veccount,
-                  const struct iovec datavec[], void **abstract);
-    int (*encrypt) (LIBSSH2_SESSION * session, unsigned char **dst,
-                    size_t *dst_len, const unsigned char *src,
-                    size_t src_len, void **abstract);
-    int (*dtor) (LIBSSH2_SESSION * session, void **abstract);
+	int (*init) (_libssh2_hostkey **out, LIBSSH2_SESSION *session,
+				 const struct _LIBSSH2_HOSTKEY_METHOD *method,
+				 ssh_buf *hostkey_data);
+	int (*read) (_libssh2_hostkey **out, LIBSSH2_SESSION *session,
+				 const struct _LIBSSH2_HOSTKEY_METHOD *method,
+				 const char *privkeyfile,
+				 const ssh_buf *passphrase);
+	int (*load) (_libssh2_hostkey **out,
+				 LIBSSH2_SESSION *session,
+				 const struct _LIBSSH2_HOSTKEY_METHOD *method,
+				 const ssh_buf *private_data,
+				 const ssh_buf *passphrase);
+	int (*verify) (_libssh2_hostkey *hash,
+				   _libssh2_cipher_type(algo),
+				   const ssh_buf *sig,
+				   const ssh_buf *m);
+	int (*signv) (ssh_buf *out_sig, _libssh2_hostkey *hash,
+				  int veccount, const struct iovec datavec[]);
+    int (*encrypt) (ssh_buf *dst, _libssh2_hostkey *hash,
+                    const ssh_buf *src);
+    int (*dtor) (_libssh2_hostkey *hash);
 };
 
 struct _LIBSSH2_CRYPT_METHOD

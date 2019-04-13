@@ -892,9 +892,8 @@ session_free(LIBSSH2_SESSION *session)
 
     if(session->state & LIBSSH2_STATE_NEWKEYS) {
         /* hostkey */
-        if(session->hostkey && session->hostkey->dtor) {
-            session->hostkey->dtor(session, &session->server_hostkey_abstract);
-        }
+		_libssh2_hostkey_free(session->server_hostkey_abstract);
+		session->server_hostkey_abstract = NULL;
 
         /* Client to Server */
         /* crypt */
