@@ -477,6 +477,8 @@ struct _LIBSSH2_LISTENER
 };
 
 typedef struct _LIBSSH2_CRYPTOR _LIBSSH2_CRYPTOR;
+typedef struct _LIBSSH2_MAC_HASHER _LIBSSH2_MAC_HASHER;
+
 typedef struct _libssh2_endpoint_data
 {
     unsigned char *banner;
@@ -489,7 +491,7 @@ typedef struct _libssh2_endpoint_data
 
     const struct _LIBSSH2_MAC_METHOD *mac;
     uint32_t seqno;
-    void *mac_abstract;
+    _LIBSSH2_MAC_HASHER *mac_abstract;
 
     const LIBSSH2_COMP_METHOD *comp;
     void *comp_abstract;

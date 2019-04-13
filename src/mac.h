@@ -50,18 +50,29 @@ struct _LIBSSH2_MAC_METHOD
     /* integrity key length */
     int key_len;
 
+	_libssh2_cipher_type(algo);
+
     /* Message Authentication Code Hashing algo */
-    int (*init) (LIBSSH2_SESSION * session, unsigned char *key, int *free_key,
-                 void **abstract);
-    int (*hash) (LIBSSH2_SESSION * session, unsigned char *buf,
-                 uint32_t seqno, const unsigned char *packet,
-                 uint32_t packet_len, const unsigned char *addtl,
-                 uint32_t addtl_len, void **abstract);
-    int (*dtor) (LIBSSH2_SESSION * session, void **abstract);
+    int (*init) (_LIBSSH2_MAC_HASHER **out,
+				 const struct _LIBSSH2_MAC_METHOD *method,
+				 LIBSSH2_SESSION *session, _libssh2_cipher_type(algo),
+				 const ssh_buf *key);
+	int (*hash) (ssh_buf *out, _LIBSSH2_MAC_HASHER *meth, uint32_t seqno,
+				 const ssh_buf *packet, const ssh_buf *addtl);
+    int (*dtor) (_LIBSSH2_MAC_HASHER *meth);
 };
 
 typedef struct _LIBSSH2_MAC_METHOD LIBSSH2_MAC_METHOD;
 
 const LIBSSH2_MAC_METHOD **_libssh2_mac_methods(void);
+
+int _libssh2_mac_init(_LIBSSH2_MAC_HASHER **out,
+					  const struct _LIBSSH2_MAC_METHOD *method,
+					  LIBSSH2_SESSION *session, _libssh2_cipher_type(algo),
+					  const ssh_buf *key);
+int _libssh2_mac_hash(ssh_buf *buf, _LIBSSH2_MAC_HASHER *hash,
+					  uint32_t seqno,
+					  const ssh_buf *packet, const ssh_buf *addtl);
+int _libssh2_mac_free(_LIBSSH2_MAC_HASHER *meth);
 
 #endif /* __LIBSSH2_MAC_H */
