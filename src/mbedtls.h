@@ -93,9 +93,6 @@
 #define _libssh2_random(buf, len) \
   _libssh2_mbedtls_random(buf, len)
 
-#define libssh2_prepare_iovec(vec, len)  /* Empty. */
-
-
 /*******************************************************************/
 /*
  * mbedTLS backend: HMAC functions

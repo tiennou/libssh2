@@ -134,6 +134,16 @@ static inline int writev(int sock, struct iovec *iov, int nvecs)
 #define send(s, b, l, f)    send((s), (unsigned char *) (b), (l), (f))
 #endif
 
+static inline void libssh2_prepare_iovec(struct iovec *vec, size_t len)
+{
+#ifdef __OS400__
+    memset((char *) (vec), 0, (len) * sizeof(struct iovec));
+#else
+    (void)vec;
+    (void)len;
+#endif
+}
+
 #include "crypto.h"
 
 #ifdef HAVE_WINSOCK2_H

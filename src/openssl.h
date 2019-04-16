@@ -137,8 +137,6 @@
 
 #define _libssh2_random(buf, len) RAND_bytes ((buf), (len))
 
-#define libssh2_prepare_iovec(vec, len)  /* Empty. */
-
 #ifdef HAVE_OPAQUE_STRUCTS
 #define libssh2_sha1_ctx EVP_MD_CTX *
 #else

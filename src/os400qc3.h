@@ -305,8 +305,6 @@ typedef struct {        /* Diffie-Hellman context. */
 #define libssh2_rsa_ctx         _libssh2_os400qc3_crypto_ctx
 #define _libssh2_rsa_free(ctx)  (_libssh2_os400qc3_crypto_dtor(ctx),        \
                                  free((char *) ctx))
-#define libssh2_prepare_iovec(vec, len) memset((char *) (vec), 0,           \
-                                               (len) * sizeof(struct iovec))
 #define _libssh2_rsa_sha1_signv(session, sig, siglen, count, vector, ctx)   \
             _libssh2_os400qc3_rsa_sha1_signv(session, sig, siglen,          \
                                              count, vector, ctx)
