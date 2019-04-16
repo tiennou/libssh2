@@ -394,9 +394,9 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     /* Parse the file */
     decoded.data = (unsigned char *)f;
     decoded.dataptr = (unsigned char *)f;
-    decoded.len = f_len;
+    decoded.size = f_len;
 
-    if(decoded.len < strlen(AUTH_MAGIC)) {
+    if(decoded.size < strlen(AUTH_MAGIC)) {
         ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO, "key too short");
         goto out;
     }
@@ -431,7 +431,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     else {
         kdf_buf.data = kdf;
         kdf_buf.dataptr = kdf;
-        kdf_buf.len = kdf_len;
+        kdf_buf.size = kdf_len;
     }
 
     if((passphrase == NULL || strlen((const char *)passphrase) == 0) &&
@@ -479,7 +479,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
 
     /* decode encrypted private key */
     decrypted.data = decrypted.dataptr = buf;
-    decrypted.len = rc;
+    decrypted.size = rc;
 
     if(ciphername && strcmp((const char *)ciphername, "none") != 0) {
         const LIBSSH2_CRYPT_METHOD **all_methods, *cur_method;
@@ -574,13 +574,13 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         }
 
         /* Do the actual decryption */
-        if((decrypted.len % blocksize) != 0) {
+        if((decrypted.size % blocksize) != 0) {
             method->dtor(session, &abstract);
             ret = LIBSSH2_ERROR_DECRYPT;
             goto out;
         }
 
-        while((size_t)len_decrypted <= decrypted.len - blocksize) {
+        while((size_t)len_decrypted <= decrypted.size - blocksize) {
             if(method->crypt(session, decrypted.data + len_decrypted,
                              blocksize,
                              &abstract)) {
@@ -610,7 +610,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
 
     if(decrypted_buf != NULL) {
         /* copy data to out-going buffer */
-        ssh_buf *out_buf = _libssh2_string_buf_new(session);
+        ssh_buf *out_buf = ssh_buf_new(session);
         if(!out_buf) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Unable to allocate memory for "
@@ -618,7 +618,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
             goto out;
         }
 
-        out_buf->data = LIBSSH2_CALLOC(session, decrypted.len);
+        out_buf->data = LIBSSH2_CALLOC(session, decrypted.size);
         if(out_buf->data == NULL) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Unable to allocate memory for "
@@ -626,10 +626,10 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
             _libssh2_string_buf_free(session, out_buf);
             goto out;
         }
-        memcpy(out_buf->data, decrypted.data, decrypted.len);
+        memcpy(out_buf->data, decrypted.data, decrypted.size);
         out_buf->dataptr = out_buf->data +
             (decrypted.dataptr - decrypted.data);
-        out_buf->len = decrypted.len;
+        out_buf->size = decrypted.size;
 
         *decrypted_buf = out_buf;
     }

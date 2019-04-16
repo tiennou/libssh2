@@ -1662,7 +1662,7 @@ gen_publickey_from_ed25519_openssh_priv_data(LIBSSH2_SESSION *session,
 
     /* Padding */
     i = 1;
-    while(decrypted->dataptr < decrypted->data + decrypted->len) {
+    while(decrypted->dataptr < decrypted->data + decrypted->size) {
         if(*decrypted->dataptr != i) {
             _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                            "Wrong padding");

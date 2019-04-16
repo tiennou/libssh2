@@ -711,7 +711,7 @@ void _libssh2_explicit_zero(void *buf, size_t size)
 
 /* String buffer */
 
-ssh_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session)
+ssh_buf *ssh_buf_new(LIBSSH2_SESSION *session)
 {
     ssh_buf *ret;
 
@@ -719,7 +719,18 @@ ssh_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session)
     if(ret == NULL)
         return NULL;
 
+	ret->session = session;
+
     return ret;
+}
+
+void ssh_buf_dispose(ssh_buf *buf)
+{
+	if(buf && buf->asize) {
+		LIBSSH2_FREE(buf->session, buf->data);
+		buf->data = buf->dataptr = NULL;
+		buf->asize = 0;
+	}
 }
 
 void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh_buf *buf)
@@ -811,9 +822,9 @@ int _libssh2_get_bignum_bytes(ssh_buf *buf, unsigned char **outbuf)
 
 int _libssh2_check_length(ssh_buf *buf, size_t len)
 {
-    unsigned char *endp = &buf->data[buf->len];
+    unsigned char *endp = &buf->data[buf->size];
     size_t left = endp - buf->dataptr;
-    return ((len <= left) && (left <= buf->len));
+    return ((len <= left) && (left <= buf->size));
 }
 
 /* Wrappers */

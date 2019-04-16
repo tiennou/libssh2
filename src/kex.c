@@ -1711,9 +1711,7 @@ kex_method_diffie_hellman_group_exchange_sha1_key_exchange
             goto dh_gex_clean_exit;
         }
 
-        buf.data = key_state->data;
-        buf.dataptr = buf.data;
-        buf.len = key_state->data_len;
+		ssh_buf_init_unowned(&buf, key_state->data, key_state->data_len);
 
         buf.dataptr++; /* increment to big num */
 
@@ -1840,9 +1838,7 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
             goto dh_gex_clean_exit;
         }
 
-        buf.data = key_state->data;
-        buf.dataptr = buf.data;
-        buf.len = key_state->data_len;
+		ssh_buf_init_unowned(&buf, key_state->data, key_state->data_len);
 
         buf.dataptr++; /* increment to big num */
 
@@ -2676,7 +2672,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         /* parse INIT reply data */
         unsigned char *server_public_key, *server_host_key;
         unsigned int server_public_key_len;
-        ssh_buf buf;
+        ssh_buf buf = SSH_BUF_CONST(data, data_len);
 
         if(data_len < 5) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2684,10 +2680,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
             goto clean_exit;
         }
 
-        buf.data = data;
-        buf.len = data_len;
-        buf.dataptr = buf.data;
-        buf.dataptr++; /* advance past packet type */
+		buf.dataptr++; /* advance past packet type */
 
         session->server_hostkey_len =
             _libssh2_get_c_string(&buf, &server_host_key);

@@ -79,9 +79,7 @@ hostkey_method_ssh_rsa_init(LIBSSH2_SESSION * session,
         return -1;
     }
 
-    buf.data = (unsigned char *)hostkey_data;
-    buf.dataptr = buf.data;
-    buf.len = hostkey_data_len;
+	ssh_buf_init_unowned(&buf, (unsigned char *)hostkey_data, hostkey_data_len);
 
     if(_libssh2_match_string(&buf, "ssh-rsa") != 0)
         return -1;
@@ -299,9 +297,7 @@ hostkey_method_ssh_dss_init(LIBSSH2_SESSION * session,
         return -1;
     }
 
-    buf.data = (unsigned char *)hostkey_data;
-    buf.dataptr = buf.data;
-    buf.len = hostkey_data_len;
+	ssh_buf_init_unowned(&buf, (unsigned char *)hostkey_data, hostkey_data_len);
 
     if(_libssh2_match_string(&buf, "ssh-dss") != 0)
         return -1;
@@ -527,9 +523,7 @@ hostkey_method_ssh_ecdsa_init(LIBSSH2_SESSION * session,
         return -1;
     }
 
-    buf.data = (unsigned char *)hostkey_data;
-    buf.dataptr = buf.data;
-    buf.len = hostkey_data_len;
+	ssh_buf_init_unowned(&buf, (unsigned char *)hostkey_data, hostkey_data_len);
 
     if(_libssh2_get_c_string(&buf, &type_str) != 19)
         return -1;
@@ -664,11 +658,10 @@ hostkey_method_ssh_ecdsa_sig_verify(LIBSSH2_SESSION * session,
 
     /* keyname_len(4) + keyname(19){"ecdsa-sha2-nistp256"} +
        signature_len(4) */
-    buf.data = (unsigned char *)sig;
-    buf.dataptr = buf.data;
-    buf.len = sig_len;
 
-   if(_libssh2_get_c_string(&buf, &name) != 19)
+	ssh_buf_init_unowned(&buf, (unsigned char *)sig, sig_len);
+
+	if(_libssh2_get_c_string(&buf, &name) != 19)
         return -1;
 
     if(_libssh2_get_u32(&buf, &len) != 0 || len < 8)

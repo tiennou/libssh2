@@ -51,13 +51,15 @@ struct list_node {
 
 typedef struct ssh_buf {
     unsigned char *data;
+	size_t asize;
+	size_t size;
     unsigned char *dataptr;
-    size_t len;
+	LIBSSH2_SESSION *session;
 } ssh_buf;
 
 #define SSH_BUF_INIT { NULL, NULL, 0 }
-#define SSH_BUF_CONST(data, size) { data, NULL, size }
-#define SSH_BUF_CTSTR(str) { str, NULL, strlen(str) }
+#define SSH_BUF_CONST(data, size) { (data), NULL, size, (data) }
+#define SSH_BUF_CSTR(str) { str, NULL, strlen(str) }
 
 int _libssh2_error_flags(LIBSSH2_SESSION* session, int errcode,
                          const char *errmsg, int errflags);
@@ -84,6 +86,41 @@ void _libssh2_list_remove(struct list_node *entry);
 size_t _libssh2_base64_encode(LIBSSH2_SESSION *session,
                               const char *inp, size_t insize, char **outptr);
 
+static inline void ssh_buf_init_unowned(ssh_buf *buf, unsigned char *data, size_t size)
+{
+	buf->data = buf->dataptr = data;
+	buf->size = size;
+}
+
+static inline void ssh_buf_init(ssh_buf *buf, unsigned char *data, size_t size)
+{
+	ssh_buf_init_unowned(buf, data, size);
+	buf->asize = size;
+}
+
+static inline unsigned char *ssh_buf_ptr(const ssh_buf *buf)
+{
+	return buf->data;
+}
+
+static inline unsigned char *ssh_buf_data(const ssh_buf *buf)
+{
+	return buf->dataptr;
+}
+
+static inline size_t ssh_buf_size(const ssh_buf *buf)
+{
+	return buf->size;
+}
+
+static inline size_t ssh_buf_available(const ssh_buf *buf)
+{
+	if (buf->asize == 0)
+		return 0;
+
+	return buf->asize - buf->size;
+}
+
 unsigned int _libssh2_ntohu32(const unsigned char *buf);
 libssh2_uint64_t _libssh2_ntohu64(const unsigned char *buf);
 void _libssh2_htonu32(unsigned char *buf, uint32_t val);
@@ -92,9 +129,9 @@ void _libssh2_store_str(unsigned char **buf, const char *str, size_t len);
 void *_libssh2_calloc(LIBSSH2_SESSION *session, size_t size);
 void _libssh2_explicit_zero(void *buf, size_t size);
 
-ssh_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session);
-void _libssh2_string_buf_free(LIBSSH2_SESSION *session,
-                              ssh_buf *buf);
+ssh_buf *ssh_buf_new(LIBSSH2_SESSION *session);
+void ssh_buf_dispose(ssh_buf *buf);
+void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh_buf *buf);
 int _libssh2_get_u32(ssh_buf *buf, uint32_t *out);
 int _libssh2_get_u64(ssh_buf *buf, libssh2_uint64_t *out);
 int _libssh2_match_string(ssh_buf *buf, const char *match);

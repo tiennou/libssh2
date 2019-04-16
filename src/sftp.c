@@ -678,11 +678,8 @@ static int
 sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
               size_t data_len)
 {
-    ssh_buf buf;
+    ssh_buf buf = SSH_BUF_CONST((unsigned char *)p, data_len);
     uint32_t flags = 0;
-    buf.data = (unsigned char *)p;
-    buf.dataptr = buf.data;
-    buf.len = data_len;
 
     if(_libssh2_get_u32(&buf, &flags) != 0) {
         return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
@@ -917,9 +914,10 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
         goto sftp_init_error;
     }
 
-    buf.data = data;
-    buf.dataptr = buf.data + 1;
-    buf.len = data_len;
+	ssh_buf_init_unowned(&buf, data, data_len);
+
+	buf.dataptr++;
+
     endp = &buf.data[data_len];
 
     if(_libssh2_get_u32(&buf, &(sftp_handle->version)) != 0) {
