@@ -28,7 +28,7 @@ void test_userauth_publickey__auth_fails_with_wrong_key(void)
                  "Public-key auth succeeded with wrong key");
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_dsa_key(void)
+void test_userauth_publickey__dsa_auth_ok(void)
 {
     int rc;
 
@@ -41,7 +41,7 @@ void test_userauth_publickey__auth_succeeds_with_correct_dsa_key(void)
     cl_ssh2_check(rc);
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_ed25519_key(void)
+void test_userauth_publickey__ed25519_auth_ok(void)
 {
     int rc;
 
@@ -56,7 +56,7 @@ void test_userauth_publickey__auth_succeeds_with_correct_ed25519_key(void)
 
 int read_file(const char *path, char **buf, size_t *len);
 
-void test_userauth_publickey__auth_succeeds_with_correct_ed25519_key_from_mem(void)
+void test_userauth_publickey__ed25519_mem_auth_ok(void)
 {
     int rc;
     char *buffer = NULL;
@@ -123,7 +123,7 @@ int read_file(const char *path, char **out_buffer, size_t *out_len)
     return 0;
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_encrypted_ed25519_key(void)
+void test_userauth_publickey__ed25519_encrypted_auth_ok(void)
 {
     int rc;
 
@@ -136,7 +136,7 @@ void test_userauth_publickey__auth_succeeds_with_correct_encrypted_ed25519_key(v
     cl_ssh2_check(rc);
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_encrypted_rsa_key(void)
+void test_userauth_publickey__rsa_encrypted_auth_ok(void)
 {
     int rc;
 
@@ -149,7 +149,7 @@ void test_userauth_publickey__auth_succeeds_with_correct_encrypted_rsa_key(void)
     cl_ssh2_check(rc);
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_rsa_key(void)
+void test_userauth_publickey__rsa_auth_ok(void)
 {
     int rc;
 
@@ -162,7 +162,7 @@ void test_userauth_publickey__auth_succeeds_with_correct_rsa_key(void)
     cl_ssh2_check(rc);
 }
 
-void test_userauth_publickey__auth_succeeds_with_correct_rsa_openssh_key(void)
+void test_userauth_publickey__rsa_openssh_auth_ok(void)
 {
     int rc;
 
