@@ -7,7 +7,9 @@ if [ -n "$SKIP_TESTS" ]; then
 fi
 
 SOURCE_DIR=${SOURCE_DIR:-$( cd "$( dirname "${BASH_SOURCE[0]}" )" && dirname $( pwd ) )}
-BUILD_DIR=$SOURCE_DIR/build
+
+. $SOURCE_DIR/ci/conf.sh
+
 TMPDIR=${TMPDIR:-/tmp}
 USER=${USER:-$(whoami)}
 
