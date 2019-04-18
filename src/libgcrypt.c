@@ -410,10 +410,15 @@ _libssh2_rsa_sha1_sign(LIBSSH2_SESSION * session,
 
     *signature = LIBSSH2_ALLOC(session, size);
     if(!*signature) {
-        return -1;
+        rc = -1;
+        goto cleanup;
     }
     memcpy(*signature, tmp, size);
     *signature_len = size;
+
+cleanup:
+    gcry_free(data);
+    gcry_free(sig_sexp);
 
     return rc;
 }
