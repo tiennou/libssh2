@@ -17,10 +17,13 @@ if [ $ADDRESS_SIZE = '32' ]; then
     sudo apt-get install -y gcc-multilib
     sudo apt-get install -y libssl-dev:i386 libgcrypt-dev:i386 build-essential gcc-multilib
     sudo dpkg --purge --force-depends gcc-multilib && sudo dpkg --purge --force-depends libssl-dev
+
+    OPENSSL_CONFIG="setarch i386 ./config -m32"
 elif [ $ADDRESS_SIZE = '64' ]; then
     sudo apt-get update -qq
     sudo apt-get install -y libssl-dev
     sudo apt-get install -y libgcrypt-dev
+    OPENSSL_CONFIG="./config"
 fi
 
 if [ $LEAK_CHECK = 'valgrind' ]; then
@@ -35,7 +38,7 @@ if [ $CRYPTO_BACKEND = 'OpenSSL' ]; then
     curl -L https://www.openssl.org/source/$OPENSSL_VERSION.tar.gz | tar -xzf -
     cd $OPENSSL_VERSION
 
-    ./config --prefix=$BUILD_ROOT --openssldir=$BUILD_ROOT
+    $OPENSSL_CONFIG --prefix=$BUILD_ROOT --openssldir=$BUILD_ROOT
     make -j3 > /dev/null && make install > /dev/null
     cd ..
 elif [ $CRYPTO_BACKEND = 'mbedTLS' ]; then
