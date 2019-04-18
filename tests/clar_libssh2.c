@@ -320,6 +320,8 @@ LIBSSH2_SESSION *cl_ssh2_connect_openssh_session(void *abstract)
 	if(!connected_session)
 		cl_fail_("failed to initialize session: %s", cl_ssh2_last_error());
 
+	libssh2_trace(connected_session, ~0x0);
+
     libssh2_session_set_blocking(connected_session, 1);
 
 	cl_ssh2_check(connect_to_server());
