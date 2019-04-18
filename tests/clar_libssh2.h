@@ -91,6 +91,8 @@ void cl_ssh2_close_connected_session(void);
 int cl_ssh2_start_openssh_fixture(void);
 void cl_ssh2_stop_openssh_fixture(void);
 
+int cl_ssh2_read_file(const char *path, char **buf, size_t *len);
+
 #define cl_ssh2_check(expr) \
 do { \
     if((expr) != 0) { \

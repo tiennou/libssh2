@@ -398,3 +398,51 @@ void cl_ssh2_close_connected_session(void)
         fprintf(stderr, "Cannot stop session - none started");
     }
 }
+
+int cl_ssh2_read_file(const char *path, char **out_buffer, size_t *out_len)
+{
+	FILE *fp = NULL;
+	char *buffer = NULL;
+	size_t len = 0;
+
+	if(out_buffer == NULL || out_len == NULL || path == NULL) {
+		fprintf(stderr, "invalid params.");
+		return 1;
+	}
+
+	*out_buffer = NULL;
+	*out_len = 0;
+
+	fp = fopen(path, "r");
+
+	if(!fp) {
+		fprintf(stderr, "File could not be read.");
+		return 1;
+	}
+
+	fseek(fp, 0L, SEEK_END);
+	len = ftell(fp);
+	rewind(fp);
+
+	buffer = calloc(1, len + 1);
+	if(!buffer) {
+		fclose(fp);
+		fprintf(stderr, "Could not alloc memory.");
+		return 1;
+	}
+
+	if(1 != fread(buffer, len, 1, fp)) {
+		fclose(fp);
+		free(buffer);
+		fprintf(stderr, "Could not read file into memory.");
+		return 1;
+	}
+
+	fclose(fp);
+
+	*out_buffer = buffer;
+	*out_len = len;
+
+	return 0;
+}
+

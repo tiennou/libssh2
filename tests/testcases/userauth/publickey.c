@@ -63,8 +63,6 @@ void test_userauth_publickey__ed25519_auth_ok(void)
     cl_ssh2_check(rc);
 }
 
-int read_file(const char *path, char **buf, size_t *len);
-
 void test_userauth_publickey__ed25519_mem_auth_ok(void)
 {
     int rc;
@@ -73,7 +71,7 @@ void test_userauth_publickey__ed25519_mem_auth_ok(void)
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
-    if(read_file(ED25519_KEYFILE_PRIVATE, &buffer, &len)) {
+    if(cl_ssh2_read_file(ED25519_KEYFILE_PRIVATE, &buffer, &len)) {
         cl_fail("Reading key file failed");
     }
 
@@ -83,53 +81,6 @@ void test_userauth_publickey__ed25519_mem_auth_ok(void)
     free(buffer);
 
     cl_ssh2_check(rc);
-}
-
-int read_file(const char *path, char **out_buffer, size_t *out_len)
-{
-    FILE *fp = NULL;
-    char *buffer = NULL;
-    size_t len = 0;
-
-    if(out_buffer == NULL || out_len == NULL || path == NULL) {
-        fprintf(stderr, "invalid params.");
-        return 1;
-    }
-
-    *out_buffer = NULL;
-    *out_len = 0;
-
-    fp = fopen(path, "r");
-
-    if(!fp) {
-       fprintf(stderr, "File could not be read.");
-       return 1;
-    }
-
-    fseek(fp, 0L, SEEK_END);
-    len = ftell(fp);
-    rewind(fp);
-
-    buffer = calloc(1, len + 1);
-    if(!buffer) {
-       fclose(fp);
-       fprintf(stderr, "Could not alloc memory.");
-       return 1;
-    }
-
-    if(1 != fread(buffer, len, 1, fp)) {
-       fclose(fp);
-       free(buffer);
-       fprintf(stderr, "Could not read file into memory.");
-       return 1;
-    }
-
-    fclose(fp);
-
-    *out_buffer = buffer;
-    *out_len = len;
-
-    return 0;
 }
 
 void test_userauth_publickey__ed25519_encrypted_auth_ok(void)
