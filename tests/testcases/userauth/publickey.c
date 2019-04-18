@@ -35,6 +35,11 @@ void test_userauth_publickey__dsa_auth_ok(void)
 {
     int rc;
     struct stat _stat;
+
+#if defined(LIBSSH2_DSA) && !LIBSSH2_DSA
+	cl_skip();
+#endif
+
     cl_must_pass(stat(DSA_KEYFILE_PUBLIC, &_stat));
     cl_must_pass(stat(DSA_KEYFILE_PRIVATE, &_stat));
 
@@ -51,6 +56,11 @@ void test_userauth_publickey__ed25519_auth_ok(void)
 {
     int rc;
     struct stat _stat;
+
+#if defined(LIBSSH2_ED25519) && !LIBSSH2_ED25519
+	cl_skip();
+#endif
+
     cl_must_pass(stat(ED25519_KEYFILE_PUBLIC, &_stat));
     cl_must_pass(stat(ED25519_KEYFILE_PRIVATE, &_stat));
 
@@ -68,6 +78,10 @@ void test_userauth_publickey__ed25519_mem_auth_ok(void)
     int rc;
     char *buffer = NULL;
     size_t len = 0;
+
+#if defined(LIBSSH2_ED25519) && !LIBSSH2_ED25519
+	cl_skip();
+#endif
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -87,6 +101,11 @@ void test_userauth_publickey__ed25519_encrypted_auth_ok(void)
 {
     int rc;
     struct stat _stat;
+
+#if defined(LIBSSH2_ED25519) && !LIBSSH2_ED25519
+	cl_skip();
+#endif
+
     cl_must_pass(stat(ED25519_KEYFILE_ENC_PUBLIC, &_stat));
     cl_must_pass(stat(ED25519_KEYFILE_ENC_PRIVATE, &_stat));
 
@@ -103,6 +122,11 @@ void test_userauth_publickey__rsa_encrypted_auth_ok(void)
 {
     int rc;
     struct stat _stat;
+
+#if defined(LIBSSH2_RSA) && !LIBSSH2_RSA
+	cl_skip();
+#endif
+
     cl_must_pass(stat(RSA_KEYFILE_ENC_PUBLIC, &_stat));
     cl_must_pass(stat(RSA_KEYFILE_ENC_PRIVATE, &_stat));
 
@@ -119,6 +143,11 @@ void test_userauth_publickey__rsa_auth_ok(void)
 {
     int rc;
 	struct stat _stat;
+
+#if defined(LIBSSH2_RSA) && !LIBSSH2_RSA
+	cl_skip();
+#endif
+
     cl_must_pass(stat(RSA_KEYFILE_PUBLIC, &_stat));
     cl_must_pass(stat(RSA_KEYFILE_PRIVATE, &_stat));
 
@@ -135,6 +164,11 @@ void test_userauth_publickey__rsa_openssh_auth_ok(void)
 {
     int rc;
     struct stat _stat;
+
+#if defined(LIBSSH2_RSA) && !LIBSSH2_RSA || !defined(LIBSSH2_OPENSSL)
+	cl_skip();
+#endif
+
     cl_must_pass(stat(RSA_OPENSSH_KEYFILE_PUBLIC, &_stat));
     cl_must_pass(stat(RSA_OPENSSH_KEYFILE_PRIVATE, &_stat));
 
