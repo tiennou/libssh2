@@ -21,6 +21,10 @@ elif [ $ADDRESS_SIZE = '64' ]; then
     sudo apt-get install -y libgcrypt11-dev
 fi
 
+if [ $LEAK_CHECK = 'valgrind' ]; then
+    sudo apt-get install -y valgrind
+fi
+
 if [ $CRYPTO_BACKEND = 'mbedTLS' ]; then
     MBEDTLSVER=mbedtls-2.4.0
 
