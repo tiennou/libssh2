@@ -35,12 +35,8 @@
  * OF SUCH DAMAGE.
  */
 
-#include "openssh_fixture.h"
-#include "libssh2_config.h"
+#include "clar_libssh2.h"
 
-#ifdef HAVE_WINSOCK2_H
-#include <winsock2.h>
-#endif
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
@@ -50,14 +46,8 @@
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
+
+#include <limits.h>
 
 static int run_command_varg(char **output, const char *command, va_list args)
 {
@@ -85,7 +75,6 @@ static int run_command_varg(char **output, const char *command, va_list args)
 
     strncat(command_buf, " 2>&1", 6);
 
-    fprintf(stdout, "Command: %s\n", command);
 #ifdef WIN32
     pipe = _popen(command_buf, "r");
 #else
@@ -265,7 +254,7 @@ cleanup:
 
 static char *running_container_id = NULL;
 
-int start_openssh_fixture()
+int cl_ssh2_start_openssh_fixture(void)
 {
     int ret;
 #ifdef HAVE_WINSOCK2_H
@@ -278,17 +267,23 @@ int start_openssh_fixture()
     }
 #endif
 
+	const char *openssh_server = cl_fixture("openssh_server");
+	ret = run_command(NULL, "cp -R \"%s\" \"%s\"", openssh_server,
+		clar_sandbox_path());
+	if(ret != 0) {
+		fprintf(stderr, "Failed to copy openssh_server directory\n");
+		return ret;
+	}
+
     ret = build_openssh_server_docker_image();
-    if(ret == 0) {
-        return start_openssh_server(&running_container_id);
-    }
-    else {
+    if(ret != 0) {
         fprintf(stderr, "Failed to build docker image\n");
         return ret;
     }
+	return start_openssh_server(&running_container_id);
 }
 
-void stop_openssh_fixture()
+void cl_ssh2_stop_openssh_fixture(void)
 {
     if(running_container_id) {
         stop_openssh_server(running_container_id);
@@ -303,4 +298,70 @@ void stop_openssh_fixture()
 int open_socket_to_openssh_server()
 {
     return open_socket_to_container(running_container_id);
+}
+
+
+LIBSSH2_SESSION *connected_session = NULL;
+int connected_socket = -1;
+
+static int connect_to_server()
+{
+    int rc;
+    connected_socket = open_socket_to_openssh_server();
+    if(connected_socket <= 0) {
+        return -1;
+    }
+
+    rc = libssh2_session_handshake(connected_session, connected_socket);
+    if(rc != 0) {
+        cl_ssh2_print_last_session_error("libssh2_session_handshake");
+        return -1;
+    }
+
+    return 0;
+}
+
+LIBSSH2_SESSION *cl_ssh2_connect_openssh_session(void *abstract)
+{
+    int rc;
+
+    connected_session = libssh2_session_init_ex(NULL, NULL, NULL, abstract);
+    libssh2_session_set_blocking(connected_session, 1);
+    if(connected_session == NULL) {
+        fprintf(stderr, "libssh2_session_init_ex failed\n");
+        return NULL;
+    }
+
+    rc = connect_to_server();
+    if(rc != 0) {
+        return NULL;
+    }
+
+    return connected_session;
+}
+
+void cl_ssh2_print_last_session_error(const char *function)
+{
+    if(connected_session) {
+        char *message;
+        int rc =
+            libssh2_session_last_error(connected_session, &message, NULL, 0);
+        fprintf(stderr, "%s failed (%d): %s\n", function, rc, message);
+    }
+    else {
+        fprintf(stderr, "No session");
+    }
+}
+
+void cl_ssh2_close_connected_session(void)
+{
+    if(connected_session) {
+        libssh2_session_disconnect(connected_session, "test ended");
+        libssh2_session_free(connected_session);
+        shutdown(connected_socket, 2);
+        connected_session = NULL;
+    }
+    else {
+        fprintf(stderr, "Cannot stop session - none started");
+    }
 }

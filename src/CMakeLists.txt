@@ -210,20 +210,41 @@ set(SOURCES
   userauth.h
   version.c)
 
+set(PUBLIC_HEADERS
+  "${PROJECT_SOURCE_DIR}/include/libssh2.h"
+  "${PROJECT_SOURCE_DIR}/include/libssh2_publickey.h"
+  "${PROJECT_SOURCE_DIR}/include/libssh2_sftp.h")
+
 if(WIN32)
   list(APPEND SOURCES ${PROJECT_SOURCE_DIR}/win32/libssh2.rc)
 endif()
 
-add_library(libssh2 ${SOURCES})
-# we want it to be called libssh2 on all platforms
-set_target_properties(libssh2 PROPERTIES PREFIX "")
+include_directories("${PROJECT_SOURCE_DIR}/include")
 
-target_compile_definitions(libssh2 PRIVATE ${PRIVATE_COMPILE_DEFINITIONS})
+# setup an object so the tests can link to our source
+add_library(libssh2-object OBJECT ${SOURCES} ${PUBLIC_HEADERS})
+
+target_compile_definitions(libssh2-object PRIVATE ${PRIVATE_COMPILE_DEFINITIONS})
+target_include_directories(libssh2-object
+  PRIVATE ${PRIVATE_INCLUDE_DIRECTORIES}
+  PUBLIC "${PROJECT_SOURCE_DIR}/include")
+
+IF(XCODE_VERSION)
+  # This is required for Xcode to actually link the libssh2 library
+  # when using only object libraries.
+  FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.c "")
+  SET(DUMMY_SRC ${CMAKE_CURRENT_BINARY_DIR}/dummy.c)
+ENDIF()
+
+add_library(libssh2 ${DUMMY_SRC} $<TARGET_OBJECTS:libssh2-object>)
 target_include_directories(libssh2
-  PRIVATE "${PROJECT_SOURCE_DIR}/include/" ${PRIVATE_INCLUDE_DIRECTORIES}
+  PRIVATE ${PRIVATE_INCLUDE_DIRECTORIES}
   PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>)
+
+# we want it to be called libssh2 on all platforms
+set_target_properties(libssh2 PROPERTIES PREFIX "")
 
 ## Options
 
@@ -245,20 +266,20 @@ if(ENABLE_ZLIB_COMPRESSION)
   list(APPEND LIBRARIES ${ZLIB_LIBRARIES})
   list(APPEND PC_REQUIRES_PRIVATE zlib)
   if(ZLIB_FOUND)
-    target_compile_definitions(libssh2 PRIVATE LIBSSH2_HAVE_ZLIB=1)
+    target_compile_definitions(libssh2-object PRIVATE LIBSSH2_HAVE_ZLIB=1)
   endif()
 endif()
 
 option(ENABLE_CRYPT_NONE "Permit \"none\" cipher -- NOT RECOMMENDED")
 add_feature_info("\"none\" cipher" ENABLE_CRYPT_NONE "")
 if(ENABLE_CRYPT_NONE)
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2_CRYPT_NONE=1)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2_CRYPT_NONE=1)
 endif()
 
 option(ENABLE_MAC_NONE "Permit \"none\" MAC -- NOT RECOMMMENDED")
 add_feature_info("\"none\" MAC" ENABLE_MAC_NONE "")
 if(ENABLE_MAC_NONE)
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2_MAC_NONE=1)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2_MAC_NONE=1)
 endif()
 
 option(ENABLE_GEX_NEW
@@ -266,7 +287,7 @@ option(ENABLE_GEX_NEW
 add_feature_info("diffie-hellman-group-exchange-sha1" ENABLE_GEX_NEW
   "\"new\" diffie-hellman-group-exchange-sha1 method")
 if(ENABLE_GEX_NEW)
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2_DH_GEX_NEW=1)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2_DH_GEX_NEW=1)
 endif()
 
 # Enable debugging logging by default if the user configured a debug build
@@ -280,7 +301,7 @@ option(ENABLE_DEBUG_LOGGING "log execution with debug trace"
 add_feature_info(Logging ENABLE_DEBUG_LOGGING
    "Logging of execution with debug trace")
 if(ENABLE_DEBUG_LOGGING)
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2DEBUG)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2DEBUG)
 endif()
 
 ## Platform checks
@@ -348,15 +369,15 @@ configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/libssh2_config_cmake.h.in
   ${CMAKE_CURRENT_BINARY_DIR}/libssh2_config.h)
 # to find generated header
-target_include_directories(libssh2 PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(libssh2-object PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # Check for the OS.
 # Daniel's note: this should not be necessary and we need to work to
 # get this removed.
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2_WIN32)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2_WIN32)
 elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  target_compile_definitions(libssh2 PRIVATE LIBSSH2_DARWIN)
+  target_compile_definitions(libssh2-object PRIVATE LIBSSH2_DARWIN)
 endif()
 
 if(CMAKE_VERSION VERSION_LESS "2.8.12")
@@ -368,10 +389,7 @@ endif()
 
 ## Installation
 
-install(FILES
-  ${PROJECT_SOURCE_DIR}/include/libssh2.h
-  ${PROJECT_SOURCE_DIR}/include/libssh2_publickey.h
-  ${PROJECT_SOURCE_DIR}/include/libssh2_sftp.h
+install(FILES ${PUBLIC_HEADERS}
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 install(TARGETS libssh2
