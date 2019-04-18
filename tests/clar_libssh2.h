@@ -55,6 +55,7 @@
 
 #include "libssh2_config.h"
 #include <libssh2.h>
+#include "../src/crypto.h"
 
  /* configured in Dockerfile */
 #define USERNAME "libssh2"

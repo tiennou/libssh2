@@ -146,6 +146,7 @@ add_executable(libssh2_clar ${SRC_CLAR} ${SRC_TEST}
 target_compile_definitions(libssh2_clar PRIVATE ${LIBSSH2_DEFINES})
 # to find generated header
 target_include_directories(libssh2_clar PRIVATE
+  "${LIBSSH2_INCLUDES}"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_CURRENT_BINARY_DIR}/../src/"
   "${CMAKE_CURRENT_BINARY_DIR}")
