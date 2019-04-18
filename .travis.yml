@@ -48,6 +48,10 @@ matrix:
   include:
     - name: "Check style"
       script: ./ci/checksrc.sh
+    - name: "Package"
+      script:
+        - ./ci/build.sh
+        - cd build && cmake --build . --target package
 
 env:
    - CRYPTO_BACKEND=Libgcrypt ENABLE_ZLIB_COMPRESSION=OFF ADDRESS_SIZE=32
