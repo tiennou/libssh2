@@ -18,6 +18,9 @@ void test_userauth_publickey__cleanup(void)
 void test_userauth_publickey__auth_fails_with_wrong_key(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(WRONG_KEYFILE_PUBLIC, &_stat));
+    cl_must_pass(stat(WRONG_KEYFILE_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -31,6 +34,9 @@ void test_userauth_publickey__auth_fails_with_wrong_key(void)
 void test_userauth_publickey__dsa_auth_ok(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(DSA_KEYFILE_PUBLIC, &_stat));
+    cl_must_pass(stat(DSA_KEYFILE_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -44,6 +50,9 @@ void test_userauth_publickey__dsa_auth_ok(void)
 void test_userauth_publickey__ed25519_auth_ok(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(ED25519_KEYFILE_PUBLIC, &_stat));
+    cl_must_pass(stat(ED25519_KEYFILE_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -126,6 +135,9 @@ int read_file(const char *path, char **out_buffer, size_t *out_len)
 void test_userauth_publickey__ed25519_encrypted_auth_ok(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(ED25519_KEYFILE_ENC_PUBLIC, &_stat));
+    cl_must_pass(stat(ED25519_KEYFILE_ENC_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -139,6 +151,9 @@ void test_userauth_publickey__ed25519_encrypted_auth_ok(void)
 void test_userauth_publickey__rsa_encrypted_auth_ok(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(RSA_KEYFILE_ENC_PUBLIC, &_stat));
+    cl_must_pass(stat(RSA_KEYFILE_ENC_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -152,6 +167,9 @@ void test_userauth_publickey__rsa_encrypted_auth_ok(void)
 void test_userauth_publickey__rsa_auth_ok(void)
 {
     int rc;
+	struct stat _stat;
+    cl_must_pass(stat(RSA_KEYFILE_PUBLIC, &_stat));
+    cl_must_pass(stat(RSA_KEYFILE_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
@@ -165,6 +183,9 @@ void test_userauth_publickey__rsa_auth_ok(void)
 void test_userauth_publickey__rsa_openssh_auth_ok(void)
 {
     int rc;
+    struct stat _stat;
+    cl_must_pass(stat(RSA_OPENSSH_KEYFILE_PUBLIC, &_stat));
+    cl_must_pass(stat(RSA_OPENSSH_KEYFILE_PRIVATE, &_stat));
 
     cl_userauth_check_mech(session, USERNAME, "publickey");
 
