@@ -306,51 +306,41 @@ int connected_socket = -1;
 
 static int connect_to_server()
 {
-    int rc;
     connected_socket = open_socket_to_openssh_server();
     if(connected_socket <= 0) {
         return -1;
     }
 
-    rc = libssh2_session_handshake(connected_session, connected_socket);
-    if(rc != 0) {
-        cl_ssh2_print_last_session_error("libssh2_session_handshake");
-        return -1;
-    }
-
-    return 0;
+    return libssh2_session_handshake(connected_session, connected_socket);
 }
 
 LIBSSH2_SESSION *cl_ssh2_connect_openssh_session(void *abstract)
 {
-    int rc;
-
     connected_session = libssh2_session_init_ex(NULL, NULL, NULL, abstract);
-    libssh2_session_set_blocking(connected_session, 1);
-    if(connected_session == NULL) {
-        fprintf(stderr, "libssh2_session_init_ex failed\n");
-        return NULL;
-    }
+	if(!connected_session)
+		cl_fail_("failed to initialize session: %s", cl_ssh2_last_error());
 
-    rc = connect_to_server();
-    if(rc != 0) {
-        return NULL;
-    }
+    libssh2_session_set_blocking(connected_session, 1);
+
+	cl_ssh2_check(connect_to_server());
 
     return connected_session;
 }
 
-void cl_ssh2_print_last_session_error(const char *function)
+const char *cl_ssh2_last_error(void)
 {
+	static char *message;
     if(connected_session) {
-        char *message;
         int rc =
             libssh2_session_last_error(connected_session, &message, NULL, 0);
-        fprintf(stderr, "%s failed (%d): %s\n", function, rc, message);
+		if(rc == 0) {
+			message = "No last error";
+		}
     }
     else {
-        fprintf(stderr, "No session");
+		message = "No session";
     }
+	return message;
 }
 
 void cl_ssh2_close_connected_session(void)

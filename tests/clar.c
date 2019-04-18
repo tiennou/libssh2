@@ -522,12 +522,13 @@ void clar__skip(void)
 	abort_test();
 }
 
-void clar__fail(
+void clar__failv(
 	const char *file,
 	int line,
 	const char *error_msg,
 	const char *description,
-	int should_abort)
+	int should_abort,
+	va_list args)
 {
 	struct clar_error *error = calloc(1, sizeof(struct clar_error));
 
@@ -543,8 +544,10 @@ void clar__fail(
 	error->line_number = line;
 	error->error_msg = error_msg;
 
-	if (description != NULL)
-		error->description = strdup(description);
+	if (description != NULL) {
+		error->description = calloc(256, sizeof(*error->description));
+		vsnprintf(error->description, 256, description, args);
+	}
 
 	_clar.total_errors++;
 	_clar.last_report->status = CL_TEST_FAILURE;
@@ -552,6 +555,24 @@ void clar__fail(
 	if (should_abort)
 		abort_test();
 }
+
+void clar__fail(
+	const char *file,
+	int line,
+	const char *error_msg,
+	const char *description,
+	int should_abort,
+	...)
+{
+	va_list args;
+
+	va_start(args, should_abort);
+
+	clar__failv(file, line, error_msg, description, should_abort, args);
+
+	va_end(args);
+}
+
 
 void clar__assert(
 	int condition,

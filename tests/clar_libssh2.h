@@ -85,17 +85,16 @@
 
 
 LIBSSH2_SESSION *cl_ssh2_connect_openssh_session(void *abstract);
-void cl_ssh2_print_last_session_error(const char *function);
+const char *cl_ssh2_last_error(void);
 void cl_ssh2_close_connected_session(void);
 
 int cl_ssh2_start_openssh_fixture(void);
 void cl_ssh2_stop_openssh_fixture(void);
 
-#define cl_fail_(msg, ...) cl_fail(msg)
 #define cl_ssh2_check(expr) \
 do { \
     if((expr) != 0) { \
-        cl_fail("Unexpected failure"); \
+        cl_fail_("Unexpected failure: %s (%d)", cl_ssh2_last_error(), (expr)); \
     }\
 } while (0);
 

@@ -8,6 +8,7 @@
 #define __CLAR_TEST_H__
 
 #include <stdlib.h>
+#include <stdarg.h>
 
 enum cl_test_status {
 	CL_TEST_OK,
@@ -108,8 +109,10 @@ void cl_fixture_cleanup(const char *fixture_name);
 /**
  * Forced failure/warning
  */
-#define cl_fail(desc) clar__fail(__FILE__, __LINE__, "Test failed.", desc, 1)
-#define cl_warning(desc) clar__fail(__FILE__, __LINE__, "Warning during test execution:", desc, 0)
+#define cl_fail_(desc, ...) clar__fail(__FILE__, __LINE__, "Test failed.", desc, 1, __VA_ARGS__)
+#define cl_warning_(desc, ...) clar__fail(__FILE__, __LINE__, "Warning during test execution:", desc, 0, __VA_ARGS__)
+#define cl_fail(desc) clar__fail(__FILE__, __LINE__, "Test failed.", desc, 1, NULL)
+#define cl_warning(desc) clar__fail(__FILE__, __LINE__, "Warning during test execution:", desc, 0, NULL)
 
 #define cl_skip() clar__skip()
 
@@ -138,12 +141,21 @@ void cl_fixture_cleanup(const char *fixture_name);
 
 void clar__skip(void);
 
+void clar__failv(
+	const char *file,
+	int line,
+	const char *error,
+	const char *description,
+	int should_abort,
+	va_list args);
+
 void clar__fail(
 	const char *file,
 	int line,
 	const char *error,
 	const char *description,
-	int should_abort);
+	int should_abort,
+	...);
 
 void clar__assert(
 	int condition,
