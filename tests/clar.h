@@ -29,7 +29,7 @@ const char *clar_sandbox_path(void);
 
 void cl_set_cleanup(void (*cleanup)(void *), void *opaque);
 void cl_fs_cleanup(void);
-
+enum cl_test_status cl_last_status(void);
 /**
  * cl_trace_* is a hook to provide a simple global tracing
  * mechanism.

@@ -709,6 +709,13 @@ void cl_set_cleanup(void (*cleanup)(void *), void *opaque)
 	_clar.local_cleanup_payload = opaque;
 }
 
+enum cl_test_status cl_last_status(void)
+{
+	if (_clar.last_report == NULL)
+		return CL_TEST_NOTRUN;
+	return _clar.last_report->status;
+}
+
 #include "clar/sandbox.h"
 #include "clar/fixtures.h"
 #include "clar/fs.h"

@@ -300,9 +300,12 @@ int open_socket_to_openssh_server()
     return open_socket_to_container(running_container_id);
 }
 
-
-LIBSSH2_SESSION *connected_session = NULL;
-int connected_socket = -1;
+static LIBSSH2_SESSION *connected_session = NULL;
+static int connected_socket = -1;
+static char *connected_trace = NULL;
+static size_t connected_trace_size = 0;
+static size_t connected_trace_slabs = 0;
+#define TRACE_SLAB 1024
 
 static int connect_to_server()
 {
@@ -314,15 +317,50 @@ static int connect_to_server()
     return libssh2_session_handshake(connected_session, connected_socket);
 }
 
+static void trace_handler(LIBSSH2_SESSION *session,
+						   void *context,
+						   const char *message,
+						   size_t length)
+{
+	if (connected_trace == NULL || ((connected_trace_size + length + 2) > (connected_trace_slabs * TRACE_SLAB)))
+	{
+		void *tmp = realloc(connected_trace, (connected_trace_slabs + 1) * TRACE_SLAB);
+		cl_assert(tmp != NULL);
+
+		connected_trace_slabs++;
+		connected_trace = tmp;
+	}
+
+	char *last_message = connected_trace + connected_trace_size;
+	memcpy(last_message, message, length);
+	last_message[length] = '\n';
+	last_message[length + 1] = '\0';
+	/* only +1 because we want to overwrite the \0 on the next call */
+	connected_trace_size += length + 1;
+}
+
+void cl_ssh2_output_trace()
+{
+	printf("%s", connected_trace);
+}
+
+static void trace_cleanup(void *payload)
+{
+	if(cl_last_status() == CL_TEST_FAILURE)
+		cl_ssh2_output_trace();
+}
+
 LIBSSH2_SESSION *cl_ssh2_connect_openssh_session(void *abstract)
 {
     connected_session = libssh2_session_init_ex(NULL, NULL, NULL, abstract);
 	if(!connected_session)
 		cl_fail_("failed to initialize session: %s", cl_ssh2_last_error());
 
+	libssh2_trace_sethandler(connected_session, NULL, trace_handler);
 	libssh2_trace(connected_session, ~0x0);
 
     libssh2_session_set_blocking(connected_session, 1);
+	cl_set_cleanup(trace_cleanup, NULL);
 
 	cl_ssh2_check(connect_to_server());
 
@@ -352,6 +390,9 @@ void cl_ssh2_close_connected_session(void)
         libssh2_session_free(connected_session);
         shutdown(connected_socket, 2);
         connected_session = NULL;
+		free(connected_trace);
+		connected_trace = NULL;
+		connected_trace_size = connected_trace_slabs = 0;
     }
     else {
         fprintf(stderr, "Cannot stop session - none started");
