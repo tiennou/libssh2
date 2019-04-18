@@ -25,11 +25,23 @@ if [ $LEAK_CHECK = 'valgrind' ]; then
     sudo apt-get install -y valgrind
 fi
 
-if [ $CRYPTO_BACKEND = 'mbedTLS' ]; then
-    MBEDTLSVER=mbedtls-2.4.0
+MBEDTLS_VERSION=mbedtls-2.4.0
+OPENSSL_VERSION=openssl-1.1.1b
 
-    curl -L https://github.com/ARMmbed/mbedtls/archive/$MBEDTLSVER.tar.gz | tar -xzf -
-    cd mbedtls-$MBEDTLSVER
+if [ $CRYPTO_BACKEND = 'OpenSSL' ]; then
+    curl -L https://www.openssl.org/source/$OPENSSL_VERSION.tar.gz | tar -xzf -
+    OPENSSL_PREFIX="$PWD/../openssl"
+    cd $OPENSSL_VERSION
+
+    ./config --prefix=$OPENSSL_PREFIX --openssldir=$OPENSSL_PREFIX
+    make -j3 > /dev/null && make install > /dev/null
+    cd ..
+
+    export CMAKE_FLAGS="$CMAKE_FLAGS -DOPENSSL_ROOT_DIR=$OPENSSL_PREFIX/include -DOPENSSL_CRYPTO_LIBRARY=$OPENSSL_PREFIX/lib/libcrypto.so -DOPENSSL_SSL_LIBRARY=$OPENSSL_PREFIX/lib/libssl.so"
+elif [ $CRYPTO_BACKEND = 'mbedTLS' ]; then
+    curl -L https://github.com/ARMmbed/mbedtls/archive/$MBEDTLS_VERSION.tar.gz | tar -xzf -
+    cd mbedtls-$MBEDTLS_VERSION
+
     cmake $CMAKE_FLAGS -DUSE_SHARED_MBEDTLS_LIBRARY=ON -DCMAKE_INSTALL_PREFIX:PATH=../usr .
     make -j3 install
     cd ..
