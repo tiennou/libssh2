@@ -55,11 +55,15 @@ typedef struct ssh_buf {
 	size_t size;
     unsigned char *dataptr;
 	LIBSSH2_SESSION *session;
+	int secure : 1;
 } ssh_buf;
 
-#define SSH_BUF_INIT { NULL, NULL, 0 }
-#define SSH_BUF_CONST(data, size) { (data), NULL, size, (data) }
-#define SSH_BUF_CSTR(str) { str, NULL, strlen(str) }
+#define SSH_BUF_INIT { NULL, NULL, 0, NULL, NULL }
+#define SSH_BUF_INIT_SESSION(s) { NULL, NULL, 0, NULL, (s) }
+#define SSH_BUF_SECINIT { NULL, NULL, 0, NULL, NULL, 1 }
+#define SSH_BUF_SECINIT_SESSION(s) { NULL, NULL, 0, NULL, (s), 1 }
+#define SSH_BUF_CONST(data, size) { (data), NULL, (size), (data), NULL }
+#define SSH_BUF_CSTR(str) { str, NULL, strlen(str), str, NULL }
 
 int _libssh2_error_flags(LIBSSH2_SESSION* session, int errcode,
                          const char *errmsg, int errflags);
@@ -130,7 +134,20 @@ void *_libssh2_calloc(LIBSSH2_SESSION *session, size_t size);
 void _libssh2_explicit_zero(void *buf, size_t size);
 
 ssh_buf *ssh_buf_new(LIBSSH2_SESSION *session);
+void ssh_buf_attach_(ssh_buf *buf,
+					 unsigned char *data, size_t size,
+					 LIBSSH2_SESSION *session);
+int ssh_buf_grow_(ssh_buf *buf, size_t size, LIBSSH2_SESSION *session);
+int ssh_buf_grow(ssh_buf *buf, size_t size);
+void ssh_buf_clear(ssh_buf *buf);
 void ssh_buf_dispose(ssh_buf *buf);
+
+int ssh_buf_random(ssh_buf *buf, size_t len);
+void ssh_buf_zero(ssh_buf *buf);
+
+int ssh_buf_put(ssh_buf *buf, const char *data, size_t size);
+int ssh_buf_puts(ssh_buf *buf, const char *str);
+
 void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh_buf *buf);
 int _libssh2_get_u32(ssh_buf *buf, uint32_t *out);
 int _libssh2_get_u64(ssh_buf *buf, libssh2_uint64_t *out);

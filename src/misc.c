@@ -724,6 +724,13 @@ ssh_buf *ssh_buf_new(LIBSSH2_SESSION *session)
     return ret;
 }
 
+void ssh_buf_clear(ssh_buf *buf)
+{
+	memset(buf->data, '\0', buf->asize);
+	buf->dataptr = buf->data;
+	buf->size = 0;
+}
+
 void ssh_buf_dispose(ssh_buf *buf)
 {
 	if(buf && buf->asize) {
@@ -731,6 +738,57 @@ void ssh_buf_dispose(ssh_buf *buf)
 		buf->data = buf->dataptr = NULL;
 		buf->asize = 0;
 	}
+}
+
+void ssh_buf_attach_(ssh_buf *buf, unsigned char *data, size_t size, LIBSSH2_SESSION *session)
+{
+	ssh_buf_clear(buf);
+	ssh_buf_init(buf, data, size);
+	buf->session = session;
+}
+
+#define SSH_BUF_PAGE 256
+
+int ssh_buf_grow_(ssh_buf *buf, size_t size, LIBSSH2_SESSION *session)
+{
+	size_t offset = buf->dataptr - buf->data;
+	size_t new_size = buf->asize + ((size / SSH_BUF_PAGE) + 1) * SSH_BUF_PAGE;
+
+	if(buf->session == NULL && session != NULL)
+		buf->session = session;
+	else if(buf->session == NULL)
+		return -1;
+
+	void *tmp = LIBSSH2_REALLOC(buf->session, buf->data, new_size);
+	if(tmp == NULL)
+		return -1;
+
+	buf->data = tmp;
+	buf->dataptr = ((char *)tmp) + offset;
+	buf->asize = new_size;
+
+	return 0;
+}
+
+int ssh_buf_grow(ssh_buf *buf, size_t size)
+{
+	return ssh_buf_grow_(buf, size, NULL);
+}
+
+int ssh_buf_put(ssh_buf *buf, const char *data, size_t size)
+{
+	if(ssh_buf_available(buf) < size &&
+		ssh_buf_grow(buf, size) < 0)
+		return -1;
+
+	memcpy(buf->dataptr, data, size);
+	buf->dataptr += size;
+	return 0;
+}
+
+int ssh_buf_puts(ssh_buf *buf, const char *str)
+{
+	return ssh_buf_put(buf, str, strlen(str));
 }
 
 void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh_buf *buf)
@@ -743,6 +801,21 @@ void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh_buf *buf)
 
     LIBSSH2_FREE(session, buf);
     buf = NULL;
+}
+
+int ssh_buf_random(ssh_buf *buf, size_t len)
+{
+	if (ssh_buf_available(buf) < len && ssh_buf_grow(buf, len) < 0)
+		return -1;
+
+	_libssh2_random(buf->dataptr, len);
+	buf->dataptr += len;
+	return 0;
+}
+
+void ssh_buf_zero(ssh_buf *buf)
+{
+	_libssh2_explicit_zero(buf->data, buf->size);
 }
 
 int _libssh2_get_u32(ssh_buf *buf, uint32_t *out)
