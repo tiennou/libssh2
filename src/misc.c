@@ -53,7 +53,7 @@
 #include <sys/time.h>
 #endif
 
-#if defined(HAVE_DECL_SECUREZEROMEMORY) && HAVE_DECL_SECUREZEROMEMORY
+#ifdef HAVE_SECUREZEROMEMORY
 #ifdef HAVE_WINDOWS_H
 #include <windows.h>
 #endif
@@ -698,7 +698,7 @@ static void * (* const volatile memset_libssh)(void *, int, size_t) = memset;
 
 void _libssh2_explicit_zero(void *buf, size_t size)
 {
-#if defined(HAVE_DECL_SECUREZEROMEMORY) && HAVE_DECL_SECUREZEROMEMORY
+#if defined(HAVE_SECUREZEROMEMORY)
     SecureZeroMemory(buf, size);
     (void)memset_libssh; /* Silence unused variable warning */
 #elif defined(HAVE_MEMSET_S)

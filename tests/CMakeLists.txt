@@ -91,6 +91,7 @@ if(CRYPTO_BACKEND STREQUAL "WinCNG" OR NOT CRYPTO_BACKEND)
 
   # The check actually compiles the header.  This requires windows.h.
   check_include_files("windows.h;bcrypt.h" HAVE_BCRYPT_H)
+  check_symbol_exists(SecureZeroMemory "windows.h;bcrypt.h" HAVE_SECUREZEROMEMORY)
 
   if(HAVE_BCRYPT_H)
     set(CRYPTO_BACKEND "WinCNG")
@@ -104,6 +105,12 @@ if(CRYPTO_BACKEND STREQUAL "mbedTLS" OR NOT CRYPTO_BACKEND)
   if(MBEDTLS_FOUND)
     set(CRYPTO_BACKEND "mbedTLS")
   endif()
+endif()
+
+check_symbol_exists(memset_s string.h HAVE_MEMSET_S)
+if(HAVE_MEMSET_S OR HAVE_SECUREZEROMEMORY)
+  set(LIBSSH2_SECURE_ZERO ON)
+  add_definitions(-DLIBSSH2_SECURE_ZERO)
 endif()
 
 # Turn around and grab our parent's COMPILE_DEFINITIONS so we use its #defines
