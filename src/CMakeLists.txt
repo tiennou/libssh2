@@ -129,6 +129,7 @@ if(CRYPTO_BACKEND STREQUAL "WinCNG" OR NOT CRYPTO_BACKEND)
 
   # The check actually compiles the header.  This requires windows.h.
   check_include_files("windows.h;bcrypt.h" HAVE_BCRYPT_H)
+  check_symbol_exists(SecureZeroMemory "windows.h;bcrypt.h" HAVE_SECUREZEROMEMORY)
 
   if(HAVE_BCRYPT_H)
     set(CRYPTO_BACKEND "WinCNG")
@@ -149,7 +150,7 @@ if(CRYPTO_BACKEND STREQUAL "WinCNG" OR NOT CRYPTO_BACKEND)
       list(APPEND PC_LIBS -lcrypt32)
     endif()
 
-  elseif(${SPECIFIC_CRYPTO_REQUIREMENT} STREQUAL ${REQUIRED})
+  elseif("${SPECIFIC_CRYPTO_REQUIREMENT}" STREQUAL "REQUIRED")
     message(FATAL_ERROR "WinCNG not available")
   endif()
 endif()
@@ -253,11 +254,6 @@ set_target_properties(libssh2 PROPERTIES PREFIX "")
 
 ## Options
 
-option(CLEAR_MEMORY "Enable clearing of memory before being freed" ON)
-if(CLEAR_MEMORY)
-    add_definitions(-DLIBSSH2_CLEAR_MEMORY)
-endif(CLEAR_MEMORY)
-
 add_feature_info("Shared library" BUILD_SHARED_LIBS
   "creating libssh2 as a shared library (.so/.dll)")
 
@@ -342,6 +338,17 @@ if (NOT HAVE_STRTOLL)
 endif()
 check_symbol_exists(snprintf stdio.h HAVE_SNPRINTF)
 check_symbol_exists(memset_s string.h HAVE_MEMSET_S)
+if(HAVE_MEMSET_S OR HAVE_SECUREZEROMEMORY)
+  set(LIBSSH2_SECURE_ZERO ON)
+  add_definitions(-DLIBSSH2_SECURE_ZERO)
+endif()
+add_feature_info(SECURE_ZERO LIBSSH2_SECURE_ZERO
+   "Zeroing memory is performed securely")
+
+option(CLEAR_MEMORY "Enable clearing of memory before being freed" ON)
+if(CLEAR_MEMORY)
+    add_definitions(-DLIBSSH2_CLEAR_MEMORY)
+endif(CLEAR_MEMORY)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR
    ${CMAKE_SYSTEM_NAME} STREQUAL "Interix")

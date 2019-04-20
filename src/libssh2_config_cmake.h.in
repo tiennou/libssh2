@@ -66,6 +66,8 @@
 #cmakedefine HAVE_STRTOLL
 #cmakedefine HAVE_STRTOI64
 #cmakedefine HAVE_SNPRINTF
+#cmakedefine HAVE_MEMSET_S
+#cmakedefine HAVE_SECUREZEROMEMORY
 
 /* OpenSSL functions */
 #cmakedefine HAVE_EVP_AES_128_CTR

@@ -106,8 +106,7 @@ safe_free(void *buf, int len)
         return;
 
 #ifdef LIBSSH2_CLEAR_MEMORY
-    if(len > 0)
-        memset(buf, 0, len);
+    _libssh2_explicit_zero(buf, len);
 #endif
 
     mbedtls_free(buf);
