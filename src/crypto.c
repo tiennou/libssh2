@@ -147,3 +147,15 @@ void _libssh2_crypto_trace(LIBSSH2_SESSION *session,
         fprintf(stderr, "%s", msg);
 #endif
 }
+
+void _libssh2_crypto_trace(const char *fmt, ...)
+{
+    va_list args;
+    char msg[2048];
+
+    va_start(args, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, args);
+    va_end(args);
+
+    fprintf(stderr, "%s", msg);
+}

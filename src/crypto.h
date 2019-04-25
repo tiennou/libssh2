@@ -79,4 +79,6 @@ int _libssh2_crypto_error(LIBSSH2_SESSION *session,
                           const char *backend_id, const char *fmt, ...);
 
 
+void _libssh2_crypto_trace(const char *fmt, ...);
+
 #endif
