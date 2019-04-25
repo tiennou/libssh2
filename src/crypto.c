@@ -93,3 +93,23 @@ _libssh2_ecdsa_curve_type_from_name(const char *name,
     return -1;
 #endif
 }
+
+void _libssh2_crypto_trace(LIBSSH2_SESSION *session,
+                           const char *backend_id, const char *fmt, ...)
+{
+    va_list args;
+    char msg[2048];
+
+    va_start(args, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, args);
+    va_end(args);
+
+    snprintf(msg, sizeof(msg), "%s: %s", backend_id, msg);
+
+    if(session)
+        _libssh2_debug(session, LIBSSH2_TRACE_CRYPTO, "%s", msg);
+    else
+#ifdef LIBSSH2DEBUG
+        fprintf(stderr, "%s", msg);
+#endif
+}

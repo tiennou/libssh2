@@ -45,6 +45,9 @@
 #include <string.h>
 #include "misc.h"
 
+#define openssl_trace(s, fmt, ...) \
+    _libssh2_crypto_trace(s, "openssl", fmt, #__VA_ARGS__)
+
 #ifndef EVP_MAX_BLOCK_LENGTH
 #define EVP_MAX_BLOCK_LENGTH 32
 #endif
@@ -2600,6 +2603,8 @@ _libssh2_ed25519_sign(libssh2_ed25519_ctx *ctx, LIBSSH2_SESSION *session,
     EVP_MD_CTX *md_ctx;
     size_t sig_len = 0;
     unsigned char *sig = NULL;
+
+    openssl_trace(session, "libssh2_ed25529_sign");
 
     md_ctx = EVP_MD_CTX_new();
     if(md_ctx == NULL)
