@@ -178,6 +178,7 @@ endif()
 include(GNUInstallDirs)
 set(SOURCES
   ${CRYPTO_SOURCES}
+  backend.h
   agent.c
   blf.h
   bcrypt_pbkdf.c
@@ -187,6 +188,7 @@ set(SOURCES
   comp.c
   comp.h
   crypt.c
+  crypto.c
   crypto.h
   global.c
   hostkey.c

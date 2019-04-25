@@ -42,12 +42,142 @@
 
 #include <string.h>
 
-_libssh2_bn *_libssh2_bn_new_from_bin_(size_t len, const void *val)
+void libssh2_crypto_init(void)
+{
+    gcry_control(GCRYCTL_DISABLE_SECMEM);
+}
+
+void libssh2_crypto_exit(void)
+{
+
+}
+
+int _libssh2_random(void *buf, size_t len)
+{
+    gcry_randomize((buf), (len), GCRY_STRONG_RANDOM);
+    return 0;
+}
+
+#define GCRYPT_CIPHER(code, digest, length)                     \
+int libssh2_##code##_init(libssh2_##code##_ctx *ctx)            \
+{                                                               \
+    if(gcry_md_open(ctx,  digest, 0) != 0)                      \
+        return -1;                                              \
+    return 0;                                                   \
+}                                                               \
+int libssh2_##code##_update(libssh2_##code##_ctx ctx,           \
+    const void *data, size_t len)                               \
+{                                                               \
+    gcry_md_write(ctx, (unsigned char *) data, len);            \
+    return 0;                                                   \
+}                                                               \
+int libssh2_##code##_final(libssh2_##code##_ctx ctx, void *out) \
+{                                                               \
+    unsigned char *ptr = gcry_md_read(ctx, 0);                  \
+    if(ptr == NULL)                                             \
+        return -1;                                              \
+    memcpy(out, ptr, length);                                   \
+    gcry_md_close(ctx);                                         \
+    return 0;                                                   \
+}
+
+GCRYPT_CIPHER(sha1, GCRY_MD_SHA1, SHA_DIGEST_LENGTH);
+GCRYPT_CIPHER(sha256, GCRY_MD_SHA256, SHA256_DIGEST_LENGTH);
+GCRYPT_CIPHER(sha384, GCRY_MD_SHA384, SHA384_DIGEST_LENGTH);
+GCRYPT_CIPHER(sha512, GCRY_MD_SHA512, SHA512_DIGEST_LENGTH);
+GCRYPT_CIPHER(md5, GCRY_MD_MD5, MD5_DIGEST_LENGTH);
+
+#define GCRYPT_HMAC_CIPHER(code, digest)                        \
+int libssh2_hmac_##code##_init(libssh2_hmac_ctx *ctx,           \
+    const void *key, size_t keylen)                             \
+{                                                               \
+    if(gcry_md_open(ctx, digest, GCRY_MD_FLAG_HMAC) != 0 ||     \
+       gcry_md_setkey(*ctx, key, keylen) != 0)                  \
+        return -1;                                              \
+    return 0;                                                   \
+}
+
+GCRYPT_HMAC_CIPHER(sha1, GCRY_MD_SHA1);
+GCRYPT_HMAC_CIPHER(sha256, GCRY_MD_SHA256);
+GCRYPT_HMAC_CIPHER(sha512, GCRY_MD_SHA512);
+GCRYPT_HMAC_CIPHER(md5, GCRY_MD_MD5);
+GCRYPT_HMAC_CIPHER(ripemd160, GCRY_MD_RMD160);
+
+int libssh2_hmac_update(libssh2_hmac_ctx ctx, const void *data, size_t datalen)
+{
+    gcry_md_write(ctx, (unsigned char *) data, datalen);
+    return 0;
+}
+
+int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *data)
+{
+    unsigned char *ptr = gcry_md_read(ctx, 0);
+    if(ptr == NULL)
+        return -1;
+
+    memcpy(data, ptr, gcry_md_get_algo_dlen(gcry_md_get_algo(ctx)));
+
+    return 0;
+}
+
+int libssh2_hmac_cleanup(libssh2_hmac_ctx *ctx)
+{
+    gcry_md_close(*ctx);
+    return 0;
+}
+
+_libssh2_bn_ctx *_libssh2_bn_ctx_new(void)
+{
+    return NULL;
+}
+
+void _libssh2_bn_ctx_free(_libssh2_bn_ctx *bnctx)
+{
+    (void)bnctx;
+}
+
+_libssh2_bn *_libssh2_bn_new(void)
+{
+    return gcry_mpi_new(0);
+}
+
+_libssh2_bn *_libssh2_bn_new_from_bin(const void *val, size_t len)
 {
     _libssh2_bn *bn;
     if(gcry_mpi_scan(&bn, GCRYMPI_FMT_USG, val, len, NULL) < 0)
         return NULL;
     return bn;
+}
+
+int _libssh2_bn_set_word(_libssh2_bn *bn, int32_t val)
+{
+    if(gcry_mpi_set_ui(bn, val) == NULL)
+        return -1;
+
+    return 0;
+}
+
+int _libssh2_bn_to_bin(const _libssh2_bn *bn, void *data)
+{
+    gcry_mpi_print(GCRYMPI_FMT_USG, data, _libssh2_bn_bytes(bn),
+                   NULL, (gcry_mpi_t)bn);
+    return _libssh2_bn_bytes(bn);
+}
+
+size_t _libssh2_bn_bytes(const _libssh2_bn *bn)
+{
+    return (gcry_mpi_get_nbits((gcry_mpi_t)bn) / 8
+            + ((gcry_mpi_get_nbits((gcry_mpi_t)bn) % 8 == 0) ? 0 : 1));
+}
+
+size_t _libssh2_bn_bits(const _libssh2_bn *bn)
+{
+    return gcry_mpi_get_nbits((gcry_mpi_t)bn);
+}
+
+void _libssh2_bn_free(_libssh2_bn *bn)
+{
+    gcry_mpi_release(bn);
 }
 
 int
@@ -93,6 +223,14 @@ _libssh2_rsa_new(libssh2_rsa_ctx ** rsa,
     return 0;
 }
 
+void _libssh2_rsa_free(libssh2_rsa_ctx *ctx)
+{
+    if(!ctx)
+        return;
+
+    gcry_sexp_release(ctx);
+}
+
 int
 _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
                          const unsigned char *sig,
@@ -103,7 +241,7 @@ _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
     gcry_sexp_t s_sig, s_hash;
     int rc = -1;
 
-    libssh2_sha1(m, m_len, hash);
+    _libssh2_sha1(m, m_len, hash);
 
     rc = gcry_sexp_build(&s_hash, NULL,
                          "(data (flags pkcs1) (hash sha1 %b))",
@@ -157,6 +295,14 @@ _libssh2_dsa_new(libssh2_dsa_ctx ** dsactx,
     }
 
     return 0;
+}
+
+void _libssh2_dsa_free(libssh2_dsa_ctx *ctx)
+{
+    if(!ctx)
+        return;
+
+    gcry_sexp_release(ctx);
 }
 
 int
@@ -529,7 +675,7 @@ _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsactx,
     gcry_sexp_t s_sig, s_hash;
     int rc = -1;
 
-    libssh2_sha1(m, m_len, hash + 1);
+    _libssh2_sha1(m, m_len, hash + 1);
     hash[0] = 0;
 
     if(gcry_sexp_build(&s_hash, NULL, "(data(flags raw)(value %b))",
@@ -593,7 +739,6 @@ _libssh2_cipher_crypt(_libssh2_cipher_ctx * ctx,
                       _libssh2_cipher_type(algo),
                       int encrypt, unsigned char *block, size_t blklen)
 {
-    int cipher = _libssh2_gcry_cipher(algo);
     int ret;
 
     if(encrypt) {
@@ -603,6 +748,11 @@ _libssh2_cipher_crypt(_libssh2_cipher_ctx * ctx,
         ret = gcry_cipher_decrypt(*ctx, block, blklen, block, blklen);
     }
     return ret;
+}
+
+void _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx)
+{
+    gcry_cipher_close(*ctx);
 }
 
 int
@@ -648,8 +798,10 @@ _libssh2_dh_init(_libssh2_dh_ctx *dhctx)
 
 int
 _libssh2_dh_key_pair(_libssh2_dh_ctx *dhctx, _libssh2_bn *public,
-                     _libssh2_bn *g, _libssh2_bn *p, int group_order)
+                     _libssh2_bn *g, _libssh2_bn *p, int group_order,
+                     _libssh2_bn_ctx *unused)
 {
+    (void)unused;
     /* Generate x and e */
     gcry_mpi_randomize(*dhctx, group_order * 8 - 1, GCRY_WEAK_RANDOM);
     gcry_mpi_powm(public, g, *dhctx, p);
@@ -658,8 +810,10 @@ _libssh2_dh_key_pair(_libssh2_dh_ctx *dhctx, _libssh2_bn *public,
 
 int
 _libssh2_dh_secret(_libssh2_dh_ctx *dhctx, _libssh2_bn *secret,
-                   _libssh2_bn *f, _libssh2_bn *p)
+                   _libssh2_bn *f, _libssh2_bn *p,
+                   _libssh2_bn_ctx *unused)
 {
+    (void)unused;
     /* Compute the shared secret */
     gcry_mpi_powm(secret, f, *dhctx, p);
     return 0;

@@ -62,7 +62,7 @@ void test_crypto_bignum__from_bin(void)
     _libssh2_bn *p;
     size_t pos = 0;
 
-    p = _libssh2_bn_new_from_bin(sizeof(p_value), p_value);
+    p = _libssh2_bn_new_from_bin(p_value, sizeof(p_value));
     cl_assert(p != NULL);
     cl_assert_equal_i(1024, _libssh2_bn_bits(p));
     cl_assert_equal_i(128, _libssh2_bn_bytes(p));

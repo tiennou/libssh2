@@ -211,7 +211,7 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
         libssh2_md5_ctx fingerprint_ctx;
 
         /* Perform key derivation (PBKDF1/MD5) */
-        if(!libssh2_md5_init(&fingerprint_ctx)) {
+        if(libssh2_md5_init(&fingerprint_ctx) != 0) {
             ret = -1;
             goto out;
         }
@@ -220,7 +220,7 @@ _libssh2_pem_parse(LIBSSH2_SESSION * session,
         libssh2_md5_update(fingerprint_ctx, iv, 8);
         libssh2_md5_final(fingerprint_ctx, secret);
         if(method->secret_len > MD5_DIGEST_LENGTH) {
-            if(!libssh2_md5_init(&fingerprint_ctx)) {
+            if(libssh2_md5_init(&fingerprint_ctx) != 0) {
                 ret = -1;
                 goto out;
             }

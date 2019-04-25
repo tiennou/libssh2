@@ -1,6 +1,4 @@
-/* Copyright (C) 2009, 2010 Simon Josefsson
- * Copyright (C) 2006, 2007 The Written Word, Inc.  All rights reserved.
- * Copyright (C) 2010-2019 Daniel Stenberg
+/* Copyright (C) 2016, Etienne Samson
  *
  * Redistribution and use in source and binary forms,
  * with or without modification, are permitted provided
@@ -35,35 +33,63 @@
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
  * OF SUCH DAMAGE.
  */
-#ifndef LIBSSH2_CRYPTO_H
-#define LIBSSH2_CRYPTO_H
 
-#ifdef LIBSSH2_OPENSSL
-#include "openssl.h"
+#include "libssh2_priv.h"
+#include <stdarg.h>
+
+#define HASH_FUNCTION(hash) \
+int _libssh2_##hash (const void *message, size_t len, void *out) \
+{ \
+    libssh2_##hash##_ctx ctx; \
+    int err = libssh2_##hash##_init(&ctx); \
+    if(err != 0) { \
+        return -1; \
+    } \
+ \
+    libssh2_##hash##_update(ctx, message, len); \
+    libssh2_##hash##_final(ctx, out); \
+ \
+    return 0; \
+}
+
+HASH_FUNCTION(sha1);
+HASH_FUNCTION(sha256);
+HASH_FUNCTION(sha384);
+HASH_FUNCTION(sha512);
+HASH_FUNCTION(md5);
+
+/* _libssh2_ecdsa_curve_type_from_name
+ *
+ * returns 0 for success, key curve type that maps to libssh2_curve_type
+ *
+ */
+
+int
+_libssh2_ecdsa_curve_type_from_name(const char *name,
+                                    libssh2_curve_type *out_type)
+{
+#if defined(LIBSSH2_ECDSA) && LIBSSH2_ECDSA
+    int ret = 0;
+    libssh2_curve_type type;
+    if(name == NULL || strlen(name) != 19)
+        return -1;
+
+    if(strcmp(name, "ecdsa-sha2-nistp256") == 0)
+        type = LIBSSH2_EC_CURVE_NISTP256;
+    else if(strcmp(name, "ecdsa-sha2-nistp384") == 0)
+        type = LIBSSH2_EC_CURVE_NISTP384;
+    else if(strcmp(name, "ecdsa-sha2-nistp521") == 0)
+        type = LIBSSH2_EC_CURVE_NISTP521;
+    else {
+        ret = -1;
+    }
+
+    if(ret == 0 && out_type) {
+        *out_type = type;
+    }
+
+    return ret;
+#else
+    return -1;
 #endif
-
-#ifdef LIBSSH2_LIBGCRYPT
-#include "libgcrypt.h"
-#endif
-
-#ifdef LIBSSH2_WINCNG
-#include "wincng.h"
-#endif
-
-#ifdef LIBSSH2_OS400QC3
-#include "os400qc3.h"
-#endif
-
-#ifdef LIBSSH2_MBEDTLS
-#include "mbedtls.h"
-#endif
-
-#include "backend.h"
-
-/* Quick hashing */
-int _libssh2_sha1(const void *message, size_t len, void *out);
-int _libssh2_sha256(const void *message, size_t len, void *out);
-int _libssh2_sha384(const void *message, size_t len, void *out);
-int _libssh2_sha512(const void *message, size_t len, void *out);
-
-#endif
+}
