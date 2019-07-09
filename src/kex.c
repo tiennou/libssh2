@@ -776,7 +776,146 @@ static int diffie_hellman(LIBSSH2_SESSION *session,
     return ret;
 }
 
+static int
+key_method_diffie_hellman_key_exchange(LIBSSH2_SESSION *session,
+                                       key_exchange_state_low_t *key_state,
+                                       libssh2_digest_algorithm algo,
+                                       const unsigned char *p_value,
+                                       size_t p_len)
+{
+    int error = 0;
+    int gex_needed = (p_value == NULL || p_len == 0);
 
+    if(key_state->state == libssh2_NB_state_idle && !gex_needed) {
+        /* Specific initialization of P and G */
+        /* SSH2 defined value (2) */
+        /* g == 2 */
+        key_state->g = _libssh2_bn_new();
+        _libssh2_bn_set_word(key_state->g, 2);
+        /* SSH2 defined value (p_value) */
+        key_state->p = _libssh2_bn_new_from_bin(p_len, p_value);
+
+        /* Short-circuit through to DH */
+        key_state->state = libssh2_NB_state_sent2;
+    }
+
+    if(key_state->state == libssh2_NB_state_idle) {
+        key_state->p = NULL;
+        key_state->g = NULL;
+        /* Ask for a P and G pair */
+#ifdef LIBSSH2_DH_GEX_NEW
+        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST;
+        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_MINGROUP);
+        _libssh2_htonu32(key_state->request + 5, LIBSSH2_DH_GEX_OPTGROUP);
+        _libssh2_htonu32(key_state->request + 9, LIBSSH2_DH_GEX_MAXGROUP);
+        key_state->request_len = 13;
+        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                       "Using Diffie-Hellman Group Exchange (New Method)");
+#else
+        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST_OLD;
+        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_OPTGROUP);
+        key_state->request_len = 5;
+        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                       "Using Diffie-Hellman Group Exchange (Old Method)");
+#endif
+
+        key_state->state = libssh2_NB_state_created;
+    }
+
+    if(key_state->state == libssh2_NB_state_created) {
+        error = _libssh2_transport_send(session, key_state->request,
+                                        key_state->request_len, NULL, 0);
+        if(error == LIBSSH2_ERROR_EAGAIN) {
+            return error;
+        }
+        else if(error) {
+            error = _libssh2_error(session, error,
+                                   "Unable to send Group Exchange Request");
+            goto dh_gex_clean_exit;
+        }
+
+        key_state->state = libssh2_NB_state_sent;
+    }
+
+    if(key_state->state == libssh2_NB_state_sent) {
+        error = _libssh2_packet_require(session, SSH_MSG_KEX_DH_GEX_GROUP,
+                                        &key_state->data, &key_state->data_len,
+                                        0, NULL, 0, &key_state->req_state);
+        if(error == LIBSSH2_ERROR_EAGAIN) {
+            return error;
+        }
+        else if(error) {
+            error = _libssh2_error(session, error,
+                                   "Timeout waiting for GEX_GROUP reply");
+            goto dh_gex_clean_exit;
+        }
+
+        key_state->state = libssh2_NB_state_sent1;
+    }
+
+    if(key_state->state == libssh2_NB_state_sent1) {
+        size_t p_len, g_len;
+        unsigned char *p, *g;
+        ssh2_buf _buf = SSH2_BUF_INIT;
+        struct string_buf buf;
+
+        if(key_state->data_len < 9) {
+            error = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
+                                   "Unexpected key length");
+            goto dh_gex_clean_exit;
+        }
+
+        ssh2_buf_init_unowned(&_buf, key_state->data, key_state->data_len);
+        string_buf_init(&buf, &_buf);
+
+        buf.data++; /* increment to big num */
+
+        if(_libssh2_get_bignum_bytes(&buf, &p, &p_len)) {
+            error = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
+                                   "Unexpected value");
+            goto dh_gex_clean_exit;
+        }
+
+        if(_libssh2_get_bignum_bytes(&buf, &g, &g_len)) {
+            error = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
+                                   "Unexpected value");
+            goto dh_gex_clean_exit;
+        }
+
+        _libssh2_bn_free(key_state->p);
+        _libssh2_bn_free(key_state->g);
+        key_state->p = _libssh2_bn_new_from_bin(p_len, p);
+        key_state->g = _libssh2_bn_new_from_bin(g_len, g);
+
+        key_state->state = libssh2_NB_state_sent2;
+    }
+
+    if(key_state->state == libssh2_NB_state_sent2) {
+        int init_msg = (gex_needed ?
+                        SSH_MSG_KEX_DH_GEX_INIT : SSH_MSG_KEXDH_INIT);
+        int reply_msg = (gex_needed ?
+                         SSH_MSG_KEX_DH_GEX_REPLY : SSH_MSG_KEXDH_REPLY);
+        error = diffie_hellman(session, key_state->g, key_state->p,
+                               algo, p_len,
+                               init_msg,
+                               reply_msg,
+                               NULL, 0, &key_state->exchange_state);
+        if(error == LIBSSH2_ERROR_EAGAIN) {
+            return error;
+        }
+
+        LIBSSH2_FREE(session, key_state->data);
+
+    dh_gex_clean_exit:
+        _libssh2_bn_free(key_state->p);
+        key_state->p = NULL;
+        _libssh2_bn_free(key_state->g);
+        key_state->g = NULL;
+        key_state->state = libssh2_NB_state_idle;
+    }
+
+    return error;
+}
 
 /* kex_method_diffie_hellman_group1_sha1_key_exchange
  * Diffie-Hellman Group1 (Actually Group2) Key Exchange using SHA1
@@ -805,40 +944,12 @@ kex_method_diffie_hellman_group1_sha1_key_exchange(LIBSSH2_SESSION *session,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
 
-    int ret;
-
-    if(key_state->state == libssh2_NB_state_idle) {
-        /* Initialize P and G */
-        /* SSH2 defined value (2) */
-        /* g == 2 */
-        key_state->g = _libssh2_bn_new();
-        _libssh2_bn_set_word(key_state->g, 2);
-        /* SSH2 defined value (p_value) */
-        key_state->p = _libssh2_bn_new_from_bin(p_value, 128);
-
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group1 Key Exchange");
-
-        key_state->state = libssh2_NB_state_created;
-    }
-    ret = diffie_hellman(session, key_state->g, key_state->p,
-                         libssh2_digest_SHA1, 128,
-                         SSH_MSG_KEXDH_INIT, SSH_MSG_KEXDH_REPLY,
-                         NULL, 0, &key_state->exchange_state);
-    if(ret == LIBSSH2_ERROR_EAGAIN) {
-        return ret;
-    }
-
-    _libssh2_bn_free(key_state->p);
-    key_state->p = NULL;
-    _libssh2_bn_free(key_state->g);
-    key_state->g = NULL;
-    key_state->state = libssh2_NB_state_idle;
-
-    return ret;
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Initiating Diffie-Hellman Group1 Key Exchange");
+    return key_method_diffie_hellman_key_exchange(session, key_state,
+                                                  libssh2_digest_SHA1,
+                                                  p_value, 128);
 }
-
-
 
 /* kex_method_diffie_hellman_group14_sha1_key_exchange
  * Diffie-Hellman Group14 Key Exchange using SHA1
@@ -882,40 +993,12 @@ kex_method_diffie_hellman_group14_sha1_key_exchange(LIBSSH2_SESSION *session,
         0x15, 0x72, 0x8E, 0x5A, 0x8A, 0xAC, 0xAA, 0x68,
         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
-    int ret;
 
-    if(key_state->state == libssh2_NB_state_idle) {
-        /* Initialize P and G */
-        /* SSH2 defined value (2) */
-        /* g == 2 */
-        key_state->g = _libssh2_bn_new();
-        _libssh2_bn_set_word(key_state->g, 2);
-        /* SSH2 defined value (p_value) */
-        key_state->p = _libssh2_bn_new_from_bin(p_value, 256);
-
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group14 Key Exchange");
-
-        key_state->state = libssh2_NB_state_created;
-    }
-    ret = diffie_hellman(session, key_state->g, key_state->p,
-                         libssh2_digest_SHA1, 256, SSH_MSG_KEXDH_INIT,
-                         SSH_MSG_KEXDH_REPLY, NULL, 0,
-                         &key_state->exchange_state);
-    if(ret == LIBSSH2_ERROR_EAGAIN) {
-        return ret;
-    }
-
-    key_state->state = libssh2_NB_state_idle;
-    _libssh2_bn_free(key_state->p);
-    key_state->p = NULL;
-    _libssh2_bn_free(key_state->g);
-    key_state->g = NULL;
-
-    return ret;
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Initiating Diffie-Hellman Group14 Key Exchange");
+    return key_method_diffie_hellman_key_exchange(session, key_state,
+                               libssh2_digest_SHA1, p_value, 256);
 }
-
-
 
 /* kex_method_diffie_hellman_group_exchange_sha1_key_exchange
  * Diffie-Hellman Group Exchange Key Exchange using SHA1
@@ -925,121 +1008,12 @@ static int
 kex_method_diffie_hellman_group_exchange_sha1_key_exchange
 (LIBSSH2_SESSION * session, key_exchange_state_low_t * key_state)
 {
-    int ret = 0;
-    int rc;
-
-    if(key_state->state == libssh2_NB_state_idle) {
-        key_state->p = NULL;
-        key_state->g = NULL;
-        /* Ask for a P and G pair */
-#ifdef LIBSSH2_DH_GEX_NEW
-        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST;
-        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_MINGROUP);
-        _libssh2_htonu32(key_state->request + 5, LIBSSH2_DH_GEX_OPTGROUP);
-        _libssh2_htonu32(key_state->request + 9, LIBSSH2_DH_GEX_MAXGROUP);
-        key_state->request_len = 13;
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group-Exchange "
-                       "(New Method)");
-#else
-        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST_OLD;
-        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_OPTGROUP);
-        key_state->request_len = 5;
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group-Exchange "
-                       "(Old Method)");
-#endif
-
-        key_state->state = libssh2_NB_state_created;
-    }
-
-    if(key_state->state == libssh2_NB_state_created) {
-        rc = _libssh2_transport_send(session, key_state->request,
-                                     key_state->request_len, NULL, 0);
-        if(rc == LIBSSH2_ERROR_EAGAIN) {
-            return rc;
-        }
-        else if(rc) {
-            ret = _libssh2_error(session, rc,
-                                 "Unable to send Group Exchange Request");
-            goto dh_gex_clean_exit;
-        }
-
-        key_state->state = libssh2_NB_state_sent;
-    }
-
-    if(key_state->state == libssh2_NB_state_sent) {
-        rc = _libssh2_packet_require(session, SSH_MSG_KEX_DH_GEX_GROUP,
-                                     &key_state->data, &key_state->data_len,
-                                     0, NULL, 0, &key_state->req_state);
-        if(rc == LIBSSH2_ERROR_EAGAIN) {
-            return rc;
-        }
-        else if(rc) {
-            ret = _libssh2_error(session, rc,
-                                 "Timeout waiting for GEX_GROUP reply");
-            goto dh_gex_clean_exit;
-        }
-
-        key_state->state = libssh2_NB_state_sent1;
-    }
-
-    if(key_state->state == libssh2_NB_state_sent1) {
-        size_t p_len, g_len;
-        unsigned char *p, *g;
-        ssh2_databuf buf;
-
-        if(key_state->data_len < 9) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected key length");
-            goto dh_gex_clean_exit;
-        }
-
-        ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
-        ssh2_databuf_advance(&buf, 1); /* increment to big num */
-
-        if(ssh2_databuf_get_bn(&buf, &p, &p_len)) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected value");
-            goto dh_gex_clean_exit;
-        }
-
-        if(ssh2_databuf_get_bn(&buf, &g, &g_len)) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected value");
-            goto dh_gex_clean_exit;
-        }
-
-        _libssh2_bn_free(key_state->p);
-        _libssh2_bn_free(key_state->g);
-        key_state->p = _libssh2_bn_new_from_bin(p, p_len);
-        key_state->g = _libssh2_bn_new_from_bin(g, g_len);
-
-        ret = diffie_hellman(session, key_state->g, key_state->p,
-                             libssh2_digest_SHA1, p_len,
-                             SSH_MSG_KEX_DH_GEX_INIT,
-                             SSH_MSG_KEX_DH_GEX_REPLY,
-                             key_state->data + 1,
-                             key_state->data_len - 1,
-                             &key_state->exchange_state);
-        if(ret == LIBSSH2_ERROR_EAGAIN) {
-            return ret;
-        }
-
-        LIBSSH2_FREE(session, key_state->data);
-    }
-
-  dh_gex_clean_exit:
-    key_state->state = libssh2_NB_state_idle;
-    _libssh2_bn_free(key_state->g);
-    key_state->g = NULL;
-    _libssh2_bn_free(key_state->p);
-    key_state->p = NULL;
-
-    return ret;
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Initiating Diffie-Hellman Group Key Exchange (SHA)");
+    return key_method_diffie_hellman_key_exchange(session, key_state,
+                                                  libssh2_digest_SHA1,
+                                                  NULL, 0);
 }
-
-
 
 /* kex_method_diffie_hellman_group_exchange_sha256_key_exchange
  * Diffie-Hellman Group Exchange Key Exchange using SHA256
@@ -1049,121 +1023,12 @@ static int
 kex_method_diffie_hellman_group_exchange_sha256_key_exchange
 (LIBSSH2_SESSION * session, key_exchange_state_low_t * key_state)
 {
-    int ret = 0;
-    int rc;
-
-    if(key_state->state == libssh2_NB_state_idle) {
-        key_state->p = NULL;
-        key_state->g = NULL;
-        /* Ask for a P and G pair */
-#ifdef LIBSSH2_DH_GEX_NEW
-        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST;
-        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_MINGROUP);
-        _libssh2_htonu32(key_state->request + 5, LIBSSH2_DH_GEX_OPTGROUP);
-        _libssh2_htonu32(key_state->request + 9, LIBSSH2_DH_GEX_MAXGROUP);
-        key_state->request_len = 13;
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group-Exchange "
-                       "(New Method SHA256)");
-#else
-        key_state->request[0] = SSH_MSG_KEX_DH_GEX_REQUEST_OLD;
-        _libssh2_htonu32(key_state->request + 1, LIBSSH2_DH_GEX_OPTGROUP);
-        key_state->request_len = 5;
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Initiating Diffie-Hellman Group-Exchange "
-                       "(Old Method SHA256)");
-#endif
-
-        key_state->state = libssh2_NB_state_created;
-    }
-
-    if(key_state->state == libssh2_NB_state_created) {
-        rc = _libssh2_transport_send(session, key_state->request,
-                                     key_state->request_len, NULL, 0);
-        if(rc == LIBSSH2_ERROR_EAGAIN) {
-            return rc;
-        }
-        else if(rc) {
-            ret = _libssh2_error(session, rc,
-                                 "Unable to send "
-                                 "Group Exchange Request SHA256");
-            goto dh_gex_clean_exit;
-        }
-
-        key_state->state = libssh2_NB_state_sent;
-    }
-
-    if(key_state->state == libssh2_NB_state_sent) {
-        rc = _libssh2_packet_require(session, SSH_MSG_KEX_DH_GEX_GROUP,
-                                     &key_state->data, &key_state->data_len,
-                                     0, NULL, 0, &key_state->req_state);
-        if(rc == LIBSSH2_ERROR_EAGAIN) {
-            return rc;
-        }
-        else if(rc) {
-            ret = _libssh2_error(session, rc,
-                                 "Timeout waiting for GEX_GROUP reply SHA256");
-            goto dh_gex_clean_exit;
-        }
-
-        key_state->state = libssh2_NB_state_sent1;
-    }
-
-    if(key_state->state == libssh2_NB_state_sent1) {
-        unsigned char *p, *g;
-        size_t p_len, g_len;
-        ssh2_databuf buf;
-
-        if(key_state->data_len < 9) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected key length");
-            goto dh_gex_clean_exit;
-        }
-
-        ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
-        ssh2_databuf_advance(&buf, 1); /* increment to big num */
-
-        if(ssh2_databuf_get_bn(&buf, &p, &p_len)) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected value");
-            goto dh_gex_clean_exit;
-        }
-
-        if(ssh2_databuf_get_bn(&buf, &g, &g_len)) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
-                                 "Unexpected value");
-            goto dh_gex_clean_exit;
-        }
-
-        _libssh2_bn_free(key_state->p);
-        _libssh2_bn_free(key_state->g);
-        key_state->p = _libssh2_bn_new_from_bin(p, p_len);
-        key_state->g = _libssh2_bn_new_from_bin(g, g_len);
-
-        ret = diffie_hellman(session, key_state->g, key_state->p,
-                             libssh2_digest_SHA256, p_len,
-                             SSH_MSG_KEX_DH_GEX_INIT,
-                             SSH_MSG_KEX_DH_GEX_REPLY,
-                             key_state->data + 1,
-                             key_state->data_len - 1,
-                             &key_state->exchange_state);
-        if(ret == LIBSSH2_ERROR_EAGAIN) {
-            return ret;
-        }
-
-        LIBSSH2_FREE(session, key_state->data);
-    }
-
-  dh_gex_clean_exit:
-    key_state->state = libssh2_NB_state_idle;
-    _libssh2_bn_free(key_state->g);
-    key_state->g = NULL;
-    _libssh2_bn_free(key_state->p);
-    key_state->p = NULL;
-
-    return ret;
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Initiating Diffie-Hellman Group Key Exchange (SHA256");
+    return key_method_diffie_hellman_key_exchange(session, key_state,
+                                                  libssh2_digest_SHA256,
+                                                  NULL, 0);
 }
-
 
 #if LIBSSH2_ECDSA
 
