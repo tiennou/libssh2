@@ -256,6 +256,193 @@ static int kex_method_hash_build(ssh2_buf *h_sig_comp,
     return 0;
 }
 
+static int kex_session_reinit(LIBSSH2_SESSION *session,
+                              libssh2_digest_algorithm algo,
+                              kmdhgGPshakex_state_t *exchange_state)
+{
+    int ret = 0;
+
+    /* Cleanup any existing cipher */
+    if(session->local.crypt->dtor) {
+        session->local.crypt->dtor(session,
+                                   &session->local.crypt_abstract);
+    }
+
+    /* Calculate IV/Secret/Key for each direction */
+    if(session->local.crypt->init) {
+        unsigned char *iv = NULL, *secret = NULL;
+        int free_iv = 0, free_secret = 0;
+
+        if(kex_method_hash(&iv, session, exchange_state, algo,
+                           session->local.crypt->iv_len, "A") < 0) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(kex_method_hash(&secret, session, exchange_state, algo,
+                           session->local.crypt->secret_len, "C") < 0) {
+            LIBSSH2_FREE(session, iv);
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(session->local.crypt->
+           init(session, session->local.crypt, iv, &free_iv, secret,
+                &free_secret, 1, &session->local.crypt_abstract)) {
+               LIBSSH2_FREE(session, iv);
+               LIBSSH2_FREE(session, secret);
+               ret = LIBSSH2_ERROR_KEX_FAILURE;
+               goto clean_exit;
+           }
+
+        if(free_iv) {
+            _libssh2_explicit_zero(iv, session->local.crypt->iv_len);
+            LIBSSH2_FREE(session, iv);
+        }
+
+        if(free_secret) {
+            _libssh2_explicit_zero(secret,
+                                   session->local.crypt->secret_len);
+            LIBSSH2_FREE(session, secret);
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Client to Server IV and Key calculated");
+
+    if(session->remote.crypt->dtor) {
+        /* Cleanup any existing cipher */
+        session->remote.crypt->dtor(session,
+                                    &session->remote.crypt_abstract);
+    }
+
+    if(session->remote.crypt->init) {
+        unsigned char *iv = NULL, *secret = NULL;
+        int free_iv = 0, free_secret = 0;
+
+        if(kex_method_hash(&iv, session, exchange_state, algo,
+                           session->remote.crypt->iv_len, "B") < 0) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(kex_method_hash(&secret, session, exchange_state, algo,
+                           session->remote.crypt->secret_len, "D") < 0) {
+            LIBSSH2_FREE(session, iv);
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(session->remote.crypt->
+           init(session, session->remote.crypt, iv, &free_iv, secret,
+                &free_secret, 0, &session->remote.crypt_abstract)) {
+               LIBSSH2_FREE(session, iv);
+               LIBSSH2_FREE(session, secret);
+               ret = LIBSSH2_ERROR_KEX_FAILURE;
+               goto clean_exit;
+           }
+
+        if(free_iv) {
+            _libssh2_explicit_zero(iv, session->remote.crypt->iv_len);
+            LIBSSH2_FREE(session, iv);
+        }
+
+        if(free_secret) {
+            _libssh2_explicit_zero(secret,
+                                   session->remote.crypt->secret_len);
+            LIBSSH2_FREE(session, secret);
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Server to Client IV and Key calculated");
+
+    if(session->local.mac->dtor) {
+        session->local.mac->dtor(session, &session->local.mac_abstract);
+    }
+
+    if(session->local.mac->init) {
+        unsigned char *key = NULL;
+        int free_key = 0;
+
+        if(kex_method_hash(&key, session, exchange_state, algo,
+                           session->local.mac->key_len, "E") < 0) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(session->local.mac->init(session, key, &free_key,
+                                    &session->local.mac_abstract) < 0) {
+            LIBSSH2_FREE(session, key);
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+
+        if(free_key) {
+            _libssh2_explicit_zero(key, session->local.mac->key_len);
+            LIBSSH2_FREE(session, key);
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Client to Server HMAC Key calculated");
+
+    if(session->remote.mac->dtor) {
+        session->remote.mac->dtor(session, &session->remote.mac_abstract);
+    }
+
+    if(session->remote.mac->init) {
+        unsigned char *key = NULL;
+        int free_key = 0;
+
+        if(kex_method_hash(&key, session, exchange_state, algo,
+                           session->remote.mac->key_len, "F") < 0) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+        if(session->remote.mac->init(session, key, &free_key,
+                                     &session->remote.mac_abstract) < 0) {
+            LIBSSH2_FREE(session, key);
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+
+        if(free_key) {
+            _libssh2_explicit_zero(key, session->remote.mac->key_len);
+            LIBSSH2_FREE(session, key);
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Server to Client HMAC Key calculated");
+
+    /* Initialize compression for each direction */
+
+    /* Cleanup any existing compression */
+    if(session->local.comp && session->local.comp->dtor) {
+        session->local.comp->dtor(session, 1,
+                                  &session->local.comp_abstract);
+    }
+
+    if(session->local.comp && session->local.comp->init) {
+        if(session->local.comp->init(session, 1,
+                                     &session->local.comp_abstract)) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Client to Server compression initialized");
+
+    if(session->remote.comp && session->remote.comp->dtor) {
+        session->remote.comp->dtor(session, 0,
+                                   &session->remote.comp_abstract);
+    }
+
+    if(session->remote.comp && session->remote.comp->init) {
+        if(session->remote.comp->init(session, 0,
+                                      &session->remote.comp_abstract)) {
+            ret = LIBSSH2_ERROR_KEX_FAILURE;
+            goto clean_exit;
+        }
+    }
+    _libssh2_debug(session, LIBSSH2_TRACE_KEX,
+                   "Server to Client compression initialized");
+clean_exit:
+    return ret;
+}
+
 /*
  * diffie_hellman
  *
@@ -551,176 +738,9 @@ static int diffie_hellman(LIBSSH2_SESSION *session,
                            "session_id calculated");
         }
 
-        /* Cleanup any existing cipher */
-        if(session->local.crypt->dtor) {
-            session->local.crypt->dtor(session,
-                                       &session->local.crypt_abstract);
-        }
-
-        /* Calculate IV/Secret/Key for each direction */
-        if(session->local.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            if(kex_method_hash(&iv, session, exchange_state, algo,
-                               session->local.crypt->iv_len, "A") < 0) {
-                ret = -1;
-                goto clean_exit;
-            }
-            if(kex_method_hash(&secret, session, exchange_state, algo,
-                               session->local.crypt->secret_len, "C") < 0) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->local.crypt->
-                init(session, session->local.crypt, iv, &free_iv, secret,
-                     &free_secret, 1, &session->local.crypt_abstract)) {
-                LIBSSH2_FREE(session, iv);
-                LIBSSH2_FREE(session, secret);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->local.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->local.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server IV and Key calculated");
-
-        if(session->remote.crypt->dtor) {
-            /* Cleanup any existing cipher */
-            session->remote.crypt->dtor(session,
-                                        &session->remote.crypt_abstract);
-        }
-
-        if(session->remote.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            if(kex_method_hash(&iv, session, exchange_state, algo,
-                               session->remote.crypt->iv_len, "B") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(kex_method_hash(&secret, session, exchange_state, algo,
-                               session->remote.crypt->secret_len, "D") < 0) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->remote.crypt->
-                init(session, session->remote.crypt, iv, &free_iv, secret,
-                     &free_secret, 0, &session->remote.crypt_abstract)) {
-                LIBSSH2_FREE(session, iv);
-                LIBSSH2_FREE(session, secret);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->remote.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->remote.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client IV and Key calculated");
-
-        if(session->local.mac->dtor) {
-            session->local.mac->dtor(session, &session->local.mac_abstract);
-        }
-
-        if(session->local.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            if(kex_method_hash(&key, session, exchange_state, algo,
-                                session->local.mac->key_len, "E") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->local.mac->init(session, key, &free_key,
-                                     &session->local.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->local.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server HMAC Key calculated");
-
-        if(session->remote.mac->dtor) {
-            session->remote.mac->dtor(session, &session->remote.mac_abstract);
-        }
-
-        if(session->remote.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            if(kex_method_hash(&key, session, exchange_state, algo,
-                               session->remote.mac->key_len, "F") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->remote.mac->init(session, key, &free_key,
-                                      &session->remote.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->remote.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client HMAC Key calculated");
-
-        /* Initialize compression for each direction */
-
-        /* Cleanup any existing compression */
-        if(session->local.comp && session->local.comp->dtor) {
-            session->local.comp->dtor(session, 1,
-                                      &session->local.comp_abstract);
-        }
-
-        if(session->local.comp && session->local.comp->init) {
-            if(session->local.comp->init(session, 1,
-                                          &session->local.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server compression initialized");
-
-        if(session->remote.comp && session->remote.comp->dtor) {
-            session->remote.comp->dtor(session, 0,
-                                       &session->remote.comp_abstract);
-        }
-
-        if(session->remote.comp && session->remote.comp->init) {
-            if(session->remote.comp->init(session, 0,
-                                           &session->remote.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client compression initialized");
-
+        ret = kex_session_reinit(session, algo, exchange_state);
+        if(ret != 0)
+            goto clean_exit;
     }
 
   clean_exit:
@@ -1253,188 +1273,9 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session,
                            "session_id calculated");
         }
 
-        /* Cleanup any existing cipher */
-        if(session->local.crypt->dtor) {
-            session->local.crypt->dtor(session,
-                                       &session->local.crypt_abstract);
-        }
-
-        /* Calculate IV/Secret/Key for each direction */
-        if(session->local.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            kex_method_hash(&iv, session, exchange_state, algo,
-                                session->local.crypt->iv_len, "A");
-            if(!iv) {
-                ret = -1;
-                goto clean_exit;
-            }
-
-            kex_method_hash(&secret, session, exchange_state, algo,
-                                session->local.crypt->secret_len, "C");
-
-            if(!secret) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->local.crypt->
-                init(session, session->local.crypt, iv, &free_iv, secret,
-                     &free_secret, 1, &session->local.crypt_abstract)) {
-                    LIBSSH2_FREE(session, iv);
-                    LIBSSH2_FREE(session, secret);
-                    ret = LIBSSH2_ERROR_KEX_FAILURE;
-                    goto clean_exit;
-                }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->local.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->local.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server IV and Key calculated");
-
-        if(session->remote.crypt->dtor) {
-            /* Cleanup any existing cipher */
-            session->remote.crypt->dtor(session,
-                                        &session->remote.crypt_abstract);
-        }
-
-        if(session->remote.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            kex_method_hash(&iv, session, exchange_state, algo,
-                                session->remote.crypt->iv_len, "B");
-
-            if(!iv) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            kex_method_hash(&secret, session, exchange_state, algo,
-                                session->remote.crypt->secret_len, "D");
-
-            if(!secret) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->remote.crypt->
-                init(session, session->remote.crypt, iv, &free_iv, secret,
-                     &free_secret, 0, &session->remote.crypt_abstract)) {
-                    LIBSSH2_FREE(session, iv);
-                    LIBSSH2_FREE(session, secret);
-                    ret = LIBSSH2_ERROR_KEX_FAILURE;
-                    goto clean_exit;
-                }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->remote.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->remote.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client IV and Key calculated");
-
-        if(session->local.mac->dtor) {
-            session->local.mac->dtor(session, &session->local.mac_abstract);
-        }
-
-        if(session->local.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            kex_method_hash(&key, session, exchange_state, algo,
-                                session->local.mac->key_len, "E");
-
-            if(!key) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->local.mac->init(session, key, &free_key,
-                                     &session->local.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->local.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server HMAC Key calculated");
-
-        if(session->remote.mac->dtor) {
-            session->remote.mac->dtor(session, &session->remote.mac_abstract);
-        }
-
-        if(session->remote.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            kex_method_hash(&key, session, exchange_state, algo,
-                                session->remote.mac->key_len, "F");
-
-            if(!key) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->remote.mac->init(session, key, &free_key,
-                                      &session->remote.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->remote.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client HMAC Key calculated");
-
-        /* Initialize compression for each direction */
-
-        /* Cleanup any existing compression */
-        if(session->local.comp && session->local.comp->dtor) {
-            session->local.comp->dtor(session, 1,
-                                      &session->local.comp_abstract);
-        }
-
-        if(session->local.comp && session->local.comp->init) {
-            if(session->local.comp->init(session, 1,
-                                          &session->local.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Client to Server compression initialized");
-
-        if(session->remote.comp && session->remote.comp->dtor) {
-            session->remote.comp->dtor(session, 0,
-                                       &session->remote.comp_abstract);
-        }
-
-        if(session->remote.comp && session->remote.comp->init) {
-            if(session->remote.comp->init(session, 0,
-                                           &session->remote.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                       "Server to Client compression initialized");
-
+        ret = kex_session_reinit(session, algo, exchange_state);
+        if(ret != 0)
+            goto clean_exit;
     }
 
 clean_exit:
@@ -1787,187 +1628,10 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
                            "session_id calculated");
         }
 
-        /* Cleanup any existing cipher */
-        if(session->local.crypt->dtor) {
-            session->local.crypt->dtor(session,
-                                        &session->local.crypt_abstract);
-        }
-
-        /* Calculate IV/Secret/Key for each direction */
-        if(session->local.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            if(kex_method_hash(&iv, session, exchange_state,
-                                          libssh2_digest_SHA256, 256,
-                                          "A") < 0) {
-                ret = -1;
-                goto clean_exit;
-            }
-
-            if(kex_method_hash(&secret, session, exchange_state,
-                                          libssh2_digest_SHA256,
-                                          session->local.crypt->secret_len,
-                                          "C") < 0) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->local.crypt->
-                init(session, session->local.crypt, iv, &free_iv, secret,
-                     &free_secret, 1, &session->local.crypt_abstract)) {
-                    LIBSSH2_FREE(session, iv);
-                    LIBSSH2_FREE(session, secret);
-                    ret = LIBSSH2_ERROR_KEX_FAILURE;
-                    goto clean_exit;
-                }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->local.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->local.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Client to Server IV and Key calculated");
-
-        if(session->remote.crypt->dtor) {
-            /* Cleanup any existing cipher */
-            session->remote.crypt->dtor(session,
-                                        &session->remote.crypt_abstract);
-        }
-
-        if(session->remote.crypt->init) {
-            unsigned char *iv = NULL, *secret = NULL;
-            int free_iv = 0, free_secret = 0;
-
-            if(kex_method_hash(&iv, session, exchange_state,
-                                          libssh2_digest_SHA256,
-                                          session->remote.crypt->iv_len,
-                                          "B") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(kex_method_hash(&secret, session, exchange_state,
-                                          libssh2_digest_SHA256,
-                                          session->remote.crypt->secret_len,
-                                          "D") < 0) {
-                LIBSSH2_FREE(session, iv);
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            if(session->remote.crypt->
-                init(session, session->remote.crypt, iv, &free_iv, secret,
-                     &free_secret, 0, &session->remote.crypt_abstract)) {
-                    LIBSSH2_FREE(session, iv);
-                    LIBSSH2_FREE(session, secret);
-                    ret = LIBSSH2_ERROR_KEX_FAILURE;
-                    goto clean_exit;
-                }
-
-            if(free_iv) {
-                _libssh2_explicit_zero(iv, session->remote.crypt->iv_len);
-                LIBSSH2_FREE(session, iv);
-            }
-
-            if(free_secret) {
-                _libssh2_explicit_zero(secret,
-                                       session->remote.crypt->secret_len);
-                LIBSSH2_FREE(session, secret);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Server to Client IV and Key calculated");
-
-        if(session->local.mac->dtor) {
-            session->local.mac->dtor(session, &session->local.mac_abstract);
-        }
-
-        if(session->local.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            if(kex_method_hash(&key, session, exchange_state,
-                                          libssh2_digest_SHA256,
-                                          session->local.mac->key_len,
-                                          "E") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->local.mac->init(session, key, &free_key,
-                                     &session->local.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->local.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Client to Server HMAC Key calculated");
-
-        if(session->remote.mac->dtor) {
-            session->remote.mac->dtor(session, &session->remote.mac_abstract);
-        }
-
-        if(session->remote.mac->init) {
-            unsigned char *key = NULL;
-            int free_key = 0;
-
-            if(kex_method_hash(&key, session, exchange_state,
-                                          libssh2_digest_SHA256,
-                                          session->remote.mac->key_len,
-                                          "F") < 0) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-            session->remote.mac->init(session, key, &free_key,
-                                      &session->remote.mac_abstract);
-
-            if(free_key) {
-                _libssh2_explicit_zero(key, session->remote.mac->key_len);
-                LIBSSH2_FREE(session, key);
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Server to Client HMAC Key calculated");
-
-        /* Initialize compression for each direction */
-
-        /* Cleanup any existing compression */
-        if(session->local.comp && session->local.comp->dtor) {
-            session->local.comp->dtor(session, 1,
-                                      &session->local.comp_abstract);
-        }
-
-        if(session->local.comp && session->local.comp->init) {
-            if(session->local.comp->init(session, 1,
-                                            &session->local.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Client to Server compression initialized");
-
-        if(session->remote.comp && session->remote.comp->dtor) {
-            session->remote.comp->dtor(session, 0,
-                                        &session->remote.comp_abstract);
-        }
-
-        if(session->remote.comp && session->remote.comp->init) {
-            if(session->remote.comp->init(session, 0,
-                                             &session->remote.comp_abstract)) {
-                ret = LIBSSH2_ERROR_KEX_FAILURE;
-                goto clean_exit;
-            }
-        }
-        _libssh2_debug(session, LIBSSH2_TRACE_KEX,
-                        "Server to Client compression initialized");
+        ret = kex_session_reinit(session,
+                                 libssh2_digest_SHA256, exchange_state);
+        if(ret != 0)
+            goto clean_exit;
     }
 
 clean_exit:
