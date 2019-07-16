@@ -83,7 +83,7 @@ static int run_command_varg(char **output, const char *command, va_list args)
         return -1;
     }
 
-    strncat(command_buf, " 2>&1", 6);
+    strlcat(command_buf, " 2>&1", sizeof(command_buf));
 
     fprintf(stdout, "Command: %s\n", command);
 #ifdef WIN32
@@ -136,7 +136,9 @@ static int run_command(char **output, const char *command, ...)
 
 static int build_openssh_server_docker_image()
 {
-    return run_command(NULL, "docker build -t libssh2/openssh_server openssh_server");
+    return run_command(NULL,
+                       "docker build -t libssh2/openssh_server openssh_server"
+                       );
 }
 
 static int start_openssh_server(char **container_id_out)
@@ -167,7 +169,9 @@ static int ip_address_from_container(char *container_id, char **ip_address_out)
         int attempt_no = 0;
         int wait_time = 500;
         for(;;) {
-            return run_command(ip_address_out, "docker-machine ip %s", active_docker_machine);
+            return run_command(ip_address_out,
+                               "docker-machine ip %s",
+                               active_docker_machine);
 
             if(attempt_no > 5) {
                 fprintf(
@@ -218,7 +222,8 @@ static int open_socket_to_container(char *container_id)
 
     int ret = ip_address_from_container(container_id, &ip_address);
     if(ret != 0) {
-        fprintf(stderr, "Failed to get IP address for container %s\n", container_id);
+        fprintf(stderr, "Failed to get IP address for container %s\n",
+                container_id);
         ret = -1;
         goto cleanup;
     }
@@ -249,7 +254,8 @@ static int open_socket_to_container(char *container_id)
 
     if(connect(sock, (struct sockaddr *)(&sin),
                sizeof(struct sockaddr_in)) != 0) {
-        fprintf(stderr, "Failed to connect to %s:%s\n", ip_address, port_string);
+        fprintf(stderr, "Failed to connect to %s:%s\n",
+                ip_address, port_string);
         ret = -1;
         goto cleanup;
     }
