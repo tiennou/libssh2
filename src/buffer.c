@@ -89,6 +89,27 @@ void ssh2_buf_attach_(ssh2_buf *buf, unsigned char *data, size_t size,
     buf->session = session;
 }
 
+int ssh2_buf_detach(ssh2_buf *buf,
+                    unsigned char **out_ptr, size_t *out_size,
+                    size_t *out_asize)
+{
+    if(out_size)
+        *out_size = buf->size;
+    if(out_asize)
+        *out_asize = buf->asize;
+
+    if(out_ptr) {
+        *out_ptr = buf->ptr;
+
+        buf->ptr = NULL;
+        buf->size = buf->asize = 0;
+
+        ssh2_buf_dispose(buf);
+        return 0;
+    }
+    return buf->size;
+}
+
 #define SSH2_BUFPAGE 256
 
 int ssh2_buf_grow_(ssh2_buf *buf, size_t size, LIBSSH2_SESSION *session)

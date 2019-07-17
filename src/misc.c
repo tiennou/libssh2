@@ -264,44 +264,44 @@ static const short base64_reverse_table[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 };
 
-/* libssh2_base64_decode
+/* _libssh2_base64_decode_buf
  *
  * Decode a base64 chunk and store it into a newly alloc'd buffer
  */
-LIBSSH2_API int
-libssh2_base64_decode(LIBSSH2_SESSION *session, char **data,
-                      unsigned int *datalen, const char *src,
-                      unsigned int src_len)
+int
+_libssh2_base64_decode_buf(ssh2_buf *dest, ssh2_buf *src,
+                           LIBSSH2_SESSION *session)
 {
-    unsigned char *s, *d;
+    unsigned char *s;
     short v;
     int i = 0, len = 0;
+    size_t required = (3 * ssh2_buf_size(src) / 4) + 1;
 
-    *data = LIBSSH2_ALLOC(session, (3 * src_len / 4) + 1);
-    d = (unsigned char *) *data;
-    if(!d) {
+    if(ssh2_buf_available(dest) < required &&
+       ssh2_buf_grow(dest, required) != 0) {
         return _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                               "Unable to allocate memory for base64 decoding");
     }
 
-    for(s = (unsigned char *) src; ((char *) s) < (src + src_len); s++) {
+    for(s = ssh2_buf_ptr(src);
+        s < (ssh2_buf_ptr(src) + ssh2_buf_size(src)); s++) {
         v = base64_reverse_table[*s];
         if(v < 0)
             continue;
         switch(i % 4) {
         case 0:
-            d[len] = (unsigned char)(v << 2);
+            dest->ptr[len] = (unsigned char)(v << 2);
             break;
         case 1:
-            d[len++] |= v >> 4;
-            d[len] = (unsigned char)(v << 4);
+            dest->ptr[len++] |= v >> 4;
+            dest->ptr[len] = (unsigned char)(v << 4);
             break;
         case 2:
-            d[len++] |= v >> 2;
-            d[len] = (unsigned char)(v << 6);
+            dest->ptr[len++] |= v >> 2;
+            dest->ptr[len] = (unsigned char)(v << 6);
             break;
         case 3:
-            d[len++] |= v;
+            dest->ptr[len++] |= v;
             break;
         }
         i++;
@@ -309,13 +309,33 @@ libssh2_base64_decode(LIBSSH2_SESSION *session, char **data,
     if((i % 4) == 1) {
         /* Invalid -- We have a byte which belongs exclusively to a partial
            octet */
-        LIBSSH2_FREE(session, *data);
-        *data = NULL;
+        ssh2_buf_dispose(dest);
         return _libssh2_error(session, LIBSSH2_ERROR_INVAL, "Invalid base64");
     }
+    dest->size = len;
+
+    return 0;
+}
+
+LIBSSH2_API int
+libssh2_base64_decode(LIBSSH2_SESSION *session, char **data,
+                      unsigned int *datalen, const char *src,
+                      unsigned int src_len)
+{
+    ssh2_buf src_buf = SSH2_BUF_CONST((unsigned char *)src, src_len);
+    ssh2_buf dst_buf = SSH2_BUF_INIT_SESSION(session);
+    int rc;
+    size_t len;
+
+    rc = _libssh2_base64_decode_buf(&dst_buf, &src_buf, session);
+
+    ssh2_buf_dispose(&src_buf);
+    ssh2_buf_detach(&dst_buf,
+                   (unsigned char **)data, &len, NULL);
 
     *datalen = len;
-    return 0;
+
+    return rc;
 }
 
 /* ---- Base64 Encoding/Decoding Table --- */

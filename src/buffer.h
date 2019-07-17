@@ -108,6 +108,9 @@ static inline size_t ssh2_buf_available(const ssh2_buf *buf)
 void ssh2_buf_attach_(ssh2_buf *buf,
                      unsigned char *data, size_t size,
                      LIBSSH2_SESSION *session);
+int ssh2_buf_detach(ssh2_buf *buf,
+                    unsigned char **out_ptr, size_t *out_size,
+                    size_t *out_asize);
 int ssh2_buf_grow_(ssh2_buf *buf, size_t size, LIBSSH2_SESSION *session);
 int ssh2_buf_grow(ssh2_buf *buf, size_t size);
 int ssh2_buf_cpy(ssh2_buf *dst, const ssh2_buf *src);
