@@ -79,6 +79,10 @@ void *_libssh2_list_prev(struct list_node *node);
 /* remove this node from the list */
 void _libssh2_list_remove(struct list_node *entry);
 
+int
+_libssh2_base64_decode_buf(ssh2_buf *dest, ssh2_buf *src,
+                           LIBSSH2_SESSION *session);
+
 size_t _libssh2_base64_encode(LIBSSH2_SESSION *session,
                               const char *inp, size_t insize, char **outptr);
 
