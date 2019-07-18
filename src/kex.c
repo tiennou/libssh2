@@ -239,7 +239,7 @@ static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
 
     if(exchange_state->state == libssh2_NB_state_sent1) {
         /* Wait for KEX reply */
-        struct string_buf buf;
+        ssh2_databuf buf;
         size_t host_key_len;
 
         rc = _libssh2_packet_require(session, packet_type_reply,
@@ -262,10 +262,10 @@ static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
             goto clean_exit;
         }
 
-        buf.data = exchange_state->s_packet;
-        buf.len = exchange_state->s_packet_len;
-        buf.dataptr = buf.data;
-        buf.dataptr++; /* advance past type */
+        ssh2_databuf_init_unowned(&buf,
+                                 exchange_state->s_packet,
+                                 exchange_state->s_packet_len);
+        ssh2_databuf_advance(&buf, 1); /* advance past type */
 
         if(session->server_hostkey)
             LIBSSH2_FREE(session, session->server_hostkey);
@@ -932,7 +932,7 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
 
     if(exchange_state->state == libssh2_NB_state_sent1) {
         /* Wait for KEX reply */
-        struct string_buf buf;
+        ssh2_databuf buf;
         size_t host_key_len;
 
         rc = _libssh2_packet_require(session, packet_type_reply,
@@ -955,10 +955,10 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
             goto clean_exit;
         }
 
-        buf.data = exchange_state->s_packet;
-        buf.len = exchange_state->s_packet_len;
-        buf.dataptr = buf.data;
-        buf.dataptr++; /* advance past type */
+        ssh2_databuf_init_unowned(&buf,
+                             exchange_state->s_packet,
+                             exchange_state->s_packet_len);
+        ssh2_databuf_advance(&buf, 1); /* advance past type */
 
         if(session->server_hostkey)
             LIBSSH2_FREE(session, session->server_hostkey);
@@ -1709,7 +1709,7 @@ kex_method_diffie_hellman_group_exchange_sha1_key_exchange
     if(key_state->state == libssh2_NB_state_sent1) {
         size_t p_len, g_len;
         unsigned char *p, *g;
-        struct string_buf buf;
+        ssh2_databuf buf;
 
         if(key_state->data_len < 9) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1717,11 +1717,8 @@ kex_method_diffie_hellman_group_exchange_sha1_key_exchange
             goto dh_gex_clean_exit;
         }
 
-        buf.data = key_state->data;
-        buf.dataptr = buf.data;
-        buf.len = key_state->data_len;
-
-        buf.dataptr++; /* increment to big num */
+        ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
+        ssh2_databuf_advance(&buf, 1); /* increment to big num */
 
         if(_libssh2_get_bignum_bytes(&buf, &p, &p_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1836,7 +1833,7 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
     if(key_state->state == libssh2_NB_state_sent1) {
         unsigned char *p, *g;
         size_t p_len, g_len;
-        struct string_buf buf;
+        ssh2_databuf buf;
 
         if(key_state->data_len < 9) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1844,11 +1841,8 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
             goto dh_gex_clean_exit;
         }
 
-        buf.data = key_state->data;
-        buf.dataptr = buf.data;
-        buf.len = key_state->data_len;
-
-        buf.dataptr++; /* increment to big num */
+        ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
+        ssh2_databuf_advance(&buf, 1); /* increment to big num */
 
         if(_libssh2_get_bignum_bytes(&buf, &p, &p_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2654,18 +2648,15 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         /* parse INIT reply data */
         unsigned char *server_public_key, *server_host_key;
         size_t server_public_key_len, hostkey_len;
-        struct string_buf buf;
+        ssh2_databuf buf;
 
         if(data_len < 5) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected key length");
             goto clean_exit;
         }
-
-        buf.data = data;
-        buf.len = data_len;
-        buf.dataptr = buf.data;
-        buf.dataptr++; /* advance past packet type */
+        ssh2_databuf_init_unowned(&buf, data, data_len);
+        ssh2_databuf_advance(&buf, 1); /* advance past packet type */
 
         if(_libssh2_get_string(&buf, &server_host_key, &hostkey_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,

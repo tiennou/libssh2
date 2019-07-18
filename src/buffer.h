@@ -40,7 +40,8 @@
 #define __LIBSSH2_BUFFER_H
 
 typedef enum {
-    SSH2_BUF_FLAG_ZERO_ON_CLEAR = 1
+    SSH2_BUF_FLAG_ZERO_ON_CLEAR = 1,
+    SSH2_BUF_FLAG_DATABUF = 2
 } ssh2_buf_flags;
 
 typedef struct ssh2_buf {
@@ -50,6 +51,8 @@ typedef struct ssh2_buf {
     LIBSSH2_SESSION *session;
     unsigned int flags;
 } ssh2_buf;
+
+typedef struct ssh2_databuf ssh2_databuf;
 
 #define SSH2_BUF_INIT { NULL, 0, 0, NULL, 0 }
 #define SSH2_BUF_INIT_SESSION(s) { NULL, 0, 0, (s),  0 }
@@ -64,6 +67,8 @@ typedef struct ssh2_buf {
 #define SSH2_BUF__IS_FLAG(buf, flag) ((buf->flags & flag) != 0)
 #define SSH2_BUF_IS_SECURE(buf) \
     SSH2_BUF__IS_FLAG(buf, SSH2_BUF_FLAG_ZERO_ON_CLEAR)
+#define SSH2_BUF_IS_DATABUF(buf) \
+    SSH2_BUF__IS_FLAG(buf, SSH2_BUF_FLAG_DATABUF)
 
 static inline void ssh2_buf_init_unowned(ssh2_buf *buf,
                                         unsigned char *data, size_t size)
@@ -124,5 +129,54 @@ void ssh2_buf_swap(ssh2_buf *buf, ssh2_buf *swp);
 
 int ssh2_buf_random(ssh2_buf *buf, size_t len);
 void ssh2_buf_zero(ssh2_buf *buf);
+
+struct ssh2_databuf {
+    ssh2_buf buf;
+    unsigned char *data;
+};
+
+#define SSH2_DATABUF_INIT_BUF(buf) { *buf, ssh2_buf_ptr(buf) }
+
+static inline void ssh2_databuf_init_buf(ssh2_databuf *buf,
+                                         const ssh2_buf *_buf)
+{
+    ssh2_buf_cpy(&buf->buf, _buf);
+    buf->buf.flags |= SSH2_BUF_FLAG_DATABUF;
+    buf->data = ssh2_buf_ptr(&buf->buf);
+}
+
+static inline void ssh2_databuf_init_unowned(ssh2_databuf *buf,
+                                            unsigned char *data, size_t size)
+{
+    ssh2_buf_init_unowned(&buf->buf, data, size);
+    buf->buf.flags |= SSH2_BUF_FLAG_DATABUF;
+    buf->data = data;
+}
+
+static inline size_t ssh2_databuf_size(const ssh2_databuf *buf)
+{
+    return ssh2_buf_size(&buf->buf);
+}
+
+static inline unsigned char *ssh2_databuf_ptr(const ssh2_databuf *buf)
+{
+    return ssh2_buf_ptr(&buf->buf);
+}
+
+static inline unsigned char *ssh2_databuf_data(const ssh2_databuf *buf)
+{
+    return buf->data;
+}
+
+void ssh2_databuf_dispose(ssh2_databuf *buf);
+
+static inline int ssh2_databuf_advance(ssh2_databuf *buf, size_t bytes)
+{
+    if(buf->data + bytes > ssh2_buf_data(&buf->buf))
+        return -1;
+
+    buf->data += bytes;
+    return 0;
+}
 
 #endif

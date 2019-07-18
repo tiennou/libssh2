@@ -366,7 +366,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
                                 ssh2_buf *out_decrypted)
 {
     const LIBSSH2_CRYPT_METHOD *method = NULL;
-    struct string_buf decoded, decrypted, kdf_buf;
+    ssh2_databuf decoded, kdf_buf, decrypted;
     unsigned char *ciphername = NULL;
     unsigned char *kdfname = NULL;
     unsigned char *kdf = NULL;
@@ -390,23 +390,21 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     }
 
     /* Parse the file */
-    decoded.data = (unsigned char *)f;
-    decoded.dataptr = (unsigned char *)f;
-    decoded.len = f_len;
+    ssh2_databuf_init_unowned(&decoded, (unsigned char *)f, f_len);
 
-    if(decoded.len < strlen(AUTH_MAGIC)) {
+    if(ssh2_databuf_size(&decoded) < strlen(AUTH_MAGIC)) {
         ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO, "key too short");
         goto out;
     }
 
-    if(strncmp((char *) decoded.dataptr, AUTH_MAGIC,
+    if(strncmp((char *) decoded.data, AUTH_MAGIC,
                strlen(AUTH_MAGIC)) != 0) {
         ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                              "key auth magic mismatch");
         goto out;
     }
 
-    decoded.dataptr += strlen(AUTH_MAGIC) + 1;
+    decoded.data += strlen(AUTH_MAGIC) + 1;
 
     if(_libssh2_get_string(&decoded, &ciphername, &tmp_len) ||
        tmp_len == 0) {
@@ -428,9 +426,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         goto out;
     }
     else {
-        kdf_buf.data = kdf;
-        kdf_buf.dataptr = kdf;
-        kdf_buf.len = kdf_len;
+        ssh2_databuf_init_unowned(&kdf_buf, kdf, kdf_len);
     }
 
     if((passphrase == NULL || strlen((const char *)passphrase) == 0) &&
@@ -476,8 +472,7 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     }
 
     /* decode encrypted private key */
-    decrypted.data = decrypted.dataptr = buf;
-    decrypted.len = tmp_len;
+    ssh2_databuf_init_unowned(&decrypted, buf, tmp_len);
 
     if(ciphername && strcmp((const char *)ciphername, "none") != 0) {
         const LIBSSH2_CRYPT_METHOD **all_methods, *cur_method;
@@ -571,14 +566,16 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         }
 
         /* Do the actual decryption */
-        if((decrypted.len % blocksize) != 0) {
+        if((ssh2_databuf_size(&decrypted) % blocksize) != 0) {
             method->dtor(session, &abstract);
             ret = LIBSSH2_ERROR_DECRYPT;
             goto out;
         }
 
-        while((size_t)len_decrypted <= decrypted.len - blocksize) {
-            if(method->crypt(session, decrypted.data + len_decrypted,
+        while((size_t)len_decrypted <=
+              ssh2_databuf_size(&decrypted) - blocksize) {
+            if(method->crypt(session,
+                             ssh2_databuf_ptr(&decrypted) + len_decrypted,
                              blocksize,
                              &abstract)) {
                 ret = LIBSSH2_ERROR_DECRYPT;
@@ -609,8 +606,10 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
         ssh2_buf out_buf = SSH2_BUF_SECINIT_SESSION(session);
 
         ssh2_buf_attach_(&out_buf,
-                         decrypted.dataptr,
-                         decrypted.len - (decrypted.dataptr - decrypted.data),
+                         decrypted.data,
+                         ssh2_databuf_size(&decrypted)
+                             - (ssh2_databuf_data(&decrypted)
+                                - ssh2_databuf_ptr(&decrypted)),
                          session);
 
         /* copy data to out-going buffer */

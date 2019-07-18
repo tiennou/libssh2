@@ -729,29 +729,29 @@ void _libssh2_explicit_zero(void *buf, size_t size)
 
 /* String buffer */
 
-int _libssh2_get_u32(struct string_buf *buf, uint32_t *out)
+int _libssh2_get_u32(ssh2_databuf *buf, uint32_t *out)
 {
     if(!_libssh2_check_length(buf, 4)) {
         return -1;
     }
 
-    *out = _libssh2_ntohu32(buf->dataptr);
-    buf->dataptr += 4;
+    *out = _libssh2_ntohu32(buf->data);
+    buf->data += 4;
     return 0;
 }
 
-int _libssh2_get_u64(struct string_buf *buf, libssh2_uint64_t *out)
+int _libssh2_get_u64(ssh2_databuf *buf, libssh2_uint64_t *out)
 {
     if(!_libssh2_check_length(buf, 8)) {
         return -1;
     }
 
-    *out = _libssh2_ntohu64(buf->dataptr);
-    buf->dataptr += 8;
+    *out = _libssh2_ntohu64(buf->data);
+    buf->data += 8;
     return 0;
 }
 
-int _libssh2_match_string(struct string_buf *buf, const char *match)
+int _libssh2_match_string(ssh2_databuf *buf, const char *match)
 {
     unsigned char *out;
     size_t len = 0;
@@ -762,7 +762,7 @@ int _libssh2_match_string(struct string_buf *buf, const char *match)
     return 0;
 }
 
-int _libssh2_get_string(struct string_buf *buf, unsigned char **outbuf,
+int _libssh2_get_string(ssh2_databuf *buf, unsigned char **outbuf,
                         size_t *outlen)
 {
     uint32_t data_len;
@@ -772,8 +772,8 @@ int _libssh2_get_string(struct string_buf *buf, unsigned char **outbuf,
     if(!_libssh2_check_length(buf, data_len)) {
         return -1;
     }
-    *outbuf = buf->dataptr;
-    buf->dataptr += data_len;
+    *outbuf = buf->data;
+    buf->data += data_len;
 
     if(outlen)
         *outlen = (size_t)data_len;
@@ -781,7 +781,7 @@ int _libssh2_get_string(struct string_buf *buf, unsigned char **outbuf,
     return 0;
 }
 
-int _libssh2_copy_string(LIBSSH2_SESSION *session, struct string_buf *buf,
+int _libssh2_copy_string(LIBSSH2_SESSION *session, ssh2_databuf *buf,
                          unsigned char **outbuf, size_t *outlen)
 {
     size_t str_len;
@@ -805,7 +805,7 @@ int _libssh2_copy_string(LIBSSH2_SESSION *session, struct string_buf *buf,
     return 0;
 }
 
-int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
+int _libssh2_get_bignum_bytes(ssh2_databuf *buf, unsigned char **outbuf,
                               size_t *outlen)
 {
     uint32_t data_len;
@@ -820,7 +820,7 @@ int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
     }
 
     bn_len = data_len;
-    bnptr = buf->dataptr;
+    bnptr = buf->data;
 
     /* trim leading zeros */
     while(bn_len > 0 && *bnptr == 0x00) {
@@ -829,7 +829,7 @@ int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
     }
 
     *outbuf = bnptr;
-    buf->dataptr += data_len;
+    buf->data += data_len;
 
     if(outlen)
         *outlen = (size_t)bn_len;
@@ -841,11 +841,11 @@ int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
    callers can read the next len number of bytes out of the buffer
    before reading the buffer content */
 
-int _libssh2_check_length(struct string_buf *buf, size_t len)
+int _libssh2_check_length(ssh2_databuf *buf, size_t len)
 {
-    unsigned char *endp = &buf->data[buf->len];
-    size_t left = endp - buf->dataptr;
-    return ((len <= left) && (left <= buf->len));
+    unsigned char *endp = ssh2_buf_data(&buf->buf);
+    size_t left = endp - ssh2_databuf_data(buf);
+    return ((len <= left) && (left <= ssh2_databuf_size(buf)));
 }
 
 /* Wrappers */
