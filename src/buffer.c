@@ -156,3 +156,55 @@ void ssh2_databuf_dispose(ssh2_databuf *buf)
 //    ssh2_buf_dispose(&buf->buf);
     buf->data = NULL;
 }
+
+int ssh2_databuf_grow(ssh2_databuf *buf, size_t size)
+{
+    size_t offset = buf->data - ssh2_databuf_ptr(buf);
+    if(ssh2_buf_grow_(&buf->buf, size, NULL) != 0)
+        return -1;
+
+    buf->data = ssh2_databuf_ptr(buf) + offset;
+
+    return 0;
+}
+
+int ssh2_databuf_put(ssh2_databuf *buf, const unsigned char *data, size_t size)
+{
+    if(ssh2_buf_available(&buf->buf) < size &&
+       ssh2_databuf_grow(buf, size) < 0)
+        return -1;
+
+    memcpy(buf->data, data, size);
+    buf->data += size;
+    buf->buf.size += size;
+    return 0;
+}
+
+int ssh2_databuf_puts(ssh2_databuf *buf, const char *str)
+{
+    return ssh2_databuf_put(buf, (const unsigned char *)str, strlen(str));
+}
+
+int ssh2_databuf_put_u8(ssh2_databuf *buf, uint8_t value)
+{
+    if(ssh2_buf_available(&buf->buf) < sizeof(value) &&
+       ssh2_databuf_grow(buf, sizeof(value)) < 0)
+        return -1;
+
+    *buf->data = value;
+    buf->data += 1;
+    buf->buf.size += sizeof(value);
+    return 0;
+}
+
+int ssh2_databuf_put_u32(ssh2_databuf *buf, uint32_t value)
+{
+    if(ssh2_buf_available(&buf->buf) < sizeof(value) &&
+       ssh2_databuf_grow(buf, sizeof(value)) < 0)
+        return -1;
+
+    _libssh2_htonu32(*buf->data, value);
+    buf->data += sizeof(value);
+    buf->buf.size += sizeof(value);
+    return 0;
+}
