@@ -183,6 +183,8 @@ set(SOURCES
   blf.h
   bcrypt_pbkdf.c
   blowfish.c
+  buffer.c
+  buffer.h
   channel.c
   channel.h
   comp.c

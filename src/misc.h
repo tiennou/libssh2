@@ -38,6 +38,8 @@
  * OF SUCH DAMAGE.
  */
 
+#include "buffer.h"
+
 struct list_head {
     struct list_node *last;
     struct list_node *first;
