@@ -94,9 +94,12 @@ void _libssh2_store_str(unsigned char **buf, const char *str, size_t len);
 void *_libssh2_calloc(LIBSSH2_SESSION *session, size_t size);
 void _libssh2_explicit_zero(void *buf, size_t size);
 
-struct string_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session);
-void _libssh2_string_buf_free(LIBSSH2_SESSION *session,
-                              struct string_buf *buf);
+static inline void string_buf_init(struct string_buf *buf, ssh2_buf *_buf)
+{
+    buf->data = buf->dataptr = _buf->ptr;
+    buf->len = _buf->size;
+}
+
 int _libssh2_get_u32(struct string_buf *buf, uint32_t *out);
 int _libssh2_get_u64(struct string_buf *buf, libssh2_uint64_t *out);
 int _libssh2_match_string(struct string_buf *buf, const char *match);

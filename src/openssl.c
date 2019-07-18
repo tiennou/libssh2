@@ -1060,7 +1060,8 @@ _libssh2_rsa_new_openssh_private(libssh2_rsa_ctx ** rsa,
     FILE *fp;
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1077,14 +1078,16 @@ _libssh2_rsa_new_openssh_private(libssh2_rsa_ctx ** rsa,
         return -1;
     }
 
-    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &decrypted);
+    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &_decrypted);
     fclose(fp);
     if(rc) {
         return rc;
     }
 
+    string_buf_init(&decrypted, &_decrypted);
+
     /* We have a new key file, now try and parse it using supported types  */
-    rc = _libssh2_get_string(decrypted, &buf, NULL);
+    rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
     if(rc != 0 || buf == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1093,7 +1096,7 @@ _libssh2_rsa_new_openssh_private(libssh2_rsa_ctx ** rsa,
     }
 
     if(strcmp("ssh-rsa", (const char *)buf) == 0) {
-        rc = gen_publickey_from_rsa_openssh_priv_data(session, decrypted,
+        rc = gen_publickey_from_rsa_openssh_priv_data(session, &decrypted,
                                                       NULL, 0,
                                                       NULL, 0, rsa);
     }
@@ -1101,8 +1104,7 @@ _libssh2_rsa_new_openssh_private(libssh2_rsa_ctx ** rsa,
         rc = -1;
     }
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     return rc;
 }
@@ -1360,7 +1362,8 @@ _libssh2_dsa_new_openssh_private(libssh2_dsa_ctx ** dsa,
     FILE *fp;
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1377,14 +1380,15 @@ _libssh2_dsa_new_openssh_private(libssh2_dsa_ctx ** dsa,
         return -1;
     }
 
-    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &decrypted);
+    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &_decrypted);
     fclose(fp);
     if(rc) {
         return rc;
     }
+    string_buf_init(&decrypted, &_decrypted);
 
     /* We have a new key file, now try and parse it using supported types  */
-    rc = _libssh2_get_string(decrypted, &buf, NULL);
+    rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
     if(rc != 0 || buf == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1393,7 +1397,7 @@ _libssh2_dsa_new_openssh_private(libssh2_dsa_ctx ** dsa,
     }
 
     if(strcmp("ssh-dss", (const char *)buf) == 0) {
-        rc = gen_publickey_from_dsa_openssh_priv_data(session, decrypted,
+        rc = gen_publickey_from_dsa_openssh_priv_data(session, &decrypted,
                                                       NULL, 0,
                                                       NULL, 0, dsa);
     }
@@ -1401,8 +1405,7 @@ _libssh2_dsa_new_openssh_private(libssh2_dsa_ctx ** dsa,
         rc = -1;
     }
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     return rc;
 }
@@ -1745,7 +1748,8 @@ _libssh2_ed25519_new_private(libssh2_ed25519_ctx ** ed_ctx,
     int rc;
     FILE *fp;
     unsigned char *buf;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
     libssh2_ed25519_ctx *ctx = NULL;
 
     if(session == NULL) {
@@ -1763,14 +1767,15 @@ _libssh2_ed25519_new_private(libssh2_ed25519_ctx ** ed_ctx,
         return -1;
     }
 
-    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &decrypted);
+    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &_decrypted);
     fclose(fp);
     if(rc) {
         return rc;
     }
+    string_buf_init(&decrypted, &_decrypted);
 
     /* We have a new key file, now try and parse it using supported types  */
-    rc = _libssh2_get_string(decrypted, &buf, NULL);
+    rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
     if(rc != 0 || buf == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -1780,7 +1785,7 @@ _libssh2_ed25519_new_private(libssh2_ed25519_ctx ** ed_ctx,
 
     if(strcmp("ssh-ed25519", (const char *)buf) == 0) {
         rc = gen_publickey_from_ed25519_openssh_priv_data(session,
-                                                          decrypted,
+                                                          &decrypted,
                                                           NULL,
                                                           NULL,
                                                           NULL,
@@ -1791,8 +1796,7 @@ _libssh2_ed25519_new_private(libssh2_ed25519_ctx ** ed_ctx,
         rc = -1;
     }
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     if(rc == 0) {
         if(ed_ctx != NULL)
@@ -2457,7 +2461,8 @@ _libssh2_ecdsa_new_openssh_private(libssh2_ecdsa_ctx ** ec_ctx,
     int rc;
     unsigned char *buf = NULL;
     libssh2_curve_type type;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
 
     if(session == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2474,14 +2479,15 @@ _libssh2_ecdsa_new_openssh_private(libssh2_ecdsa_ctx ** ec_ctx,
         return -1;
     }
 
-    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &decrypted);
+    rc = _libssh2_openssh_pem_parse(session, passphrase, fp, &_decrypted);
     fclose(fp);
     if(rc) {
         return rc;
     }
+    string_buf_init(&decrypted, &_decrypted);
 
     /* We have a new key file, now try and parse it using supported types  */
-    rc = _libssh2_get_string(decrypted, &buf, NULL);
+    rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
     if(rc != 0 || buf == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2493,15 +2499,14 @@ _libssh2_ecdsa_new_openssh_private(libssh2_ecdsa_ctx ** ec_ctx,
 
     if(rc == 0) {
         rc = gen_publickey_from_ecdsa_openssh_priv_data(session, type,
-                                                        decrypted, NULL, 0,
+                                                        &decrypted, NULL, 0,
                                                         NULL, 0, ec_ctx);
     }
     else {
         rc = -1;
     }
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     return rc;
 }
@@ -2829,7 +2834,8 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
 {
     FILE *fp;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
     int rc = 0;
 
     if(session == NULL) {
@@ -2848,16 +2854,17 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
     }
 
     rc = _libssh2_openssh_pem_parse(session, (const unsigned char *)passphrase,
-                                    fp, &decrypted);
+                                    fp, &_decrypted);
     fclose(fp);
     if(rc) {
         _libssh2_error(session, LIBSSH2_ERROR_FILE,
                        "Not an OpenSSH key file");
         return rc;
     }
+    string_buf_init(&decrypted, &_decrypted);
 
     /* We have a new key file, now try and parse it using supported types  */
-    rc = _libssh2_get_string(decrypted, &buf, NULL);
+    rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
     if(rc != 0 || buf == NULL) {
         _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -2869,7 +2876,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
 
 #if LIBSSH2_ED25519
     if(strcmp("ssh-ed25519", (const char *)buf) == 0) {
-        rc = gen_publickey_from_ed25519_openssh_priv_data(session, decrypted,
+        rc = gen_publickey_from_ed25519_openssh_priv_data(session, &decrypted,
                                                           method, method_len,
                                                           pubkeydata,
                                                           pubkeydata_len,
@@ -2878,7 +2885,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
 #endif
 #if LIBSSH2_RSA
     if(strcmp("ssh-rsa", (const char *)buf) == 0) {
-        rc = gen_publickey_from_rsa_openssh_priv_data(session, decrypted,
+        rc = gen_publickey_from_rsa_openssh_priv_data(session, &decrypted,
                                                       method, method_len,
                                                       pubkeydata,
                                                       pubkeydata_len,
@@ -2887,7 +2894,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
 #endif
 #if LIBSSH2_DSA
     if(strcmp("ssh-dss", (const char *)buf) == 0) {
-        rc = gen_publickey_from_dsa_openssh_priv_data(session, decrypted,
+        rc = gen_publickey_from_dsa_openssh_priv_data(session, &decrypted,
                                                       method, method_len,
                                                       pubkeydata,
                                                       pubkeydata_len,
@@ -2901,7 +2908,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
         if(_libssh2_ecdsa_curve_type_from_name((const char *)buf,
                                                &type) == 0) {
             rc = gen_publickey_from_ecdsa_openssh_priv_data(session, type,
-                                                            decrypted,
+                                                            &decrypted,
                                                             method, method_len,
                                                             pubkeydata,
                                                             pubkeydata_len,
@@ -2910,8 +2917,7 @@ _libssh2_pub_priv_openssh_keyfile(LIBSSH2_SESSION *session,
     }
 #endif
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     if(rc != 0) {
         _libssh2_error(session, LIBSSH2_ERROR_FILE,
@@ -3032,7 +3038,8 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 {
     int rc;
     unsigned char *buf = NULL;
-    struct string_buf *decrypted = NULL;
+    ssh2_buf _decrypted = SSH2_BUF_SECINIT_SESSION(session);
+    struct string_buf decrypted;
 
     if(key_ctx != NULL)
         *key_ctx = NULL;
@@ -3053,14 +3060,15 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 
     rc = _libssh2_openssh_pem_parse_memory(session, passphrase,
                                            privatekeydata,
-                                           privatekeydata_len, &decrypted);
+                                           privatekeydata_len, &_decrypted);
 
     if(rc) {
         return rc;
     }
+    string_buf_init(&decrypted, &_decrypted);
 
    /* We have a new key file, now try and parse it using supported types  */
-   rc = _libssh2_get_string(decrypted, &buf, NULL);
+   rc = _libssh2_get_string(&decrypted, &buf, NULL);
 
    if(rc != 0 || buf == NULL) {
        _libssh2_error(session, LIBSSH2_ERROR_PROTO,
@@ -3074,7 +3082,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
     if(strcmp("ssh-ed25519", (const char *)buf) == 0) {
         if(key_type == NULL || strcmp("ssh-ed25519", key_type) == 0) {
             rc = gen_publickey_from_ed25519_openssh_priv_data(session,
-                                                              decrypted,
+                                                              &decrypted,
                                                               method,
                                                               method_len,
                                                               pubkeydata,
@@ -3086,7 +3094,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 #if LIBSSH2_RSA
     if(strcmp("ssh-rsa", (const char *)buf) == 0) {
         if(key_type == NULL || strcmp("ssh-rsa", key_type) == 0) {
-            rc = gen_publickey_from_rsa_openssh_priv_data(session, decrypted,
+            rc = gen_publickey_from_rsa_openssh_priv_data(session, &decrypted,
                                                           method, method_len,
                                                           pubkeydata,
                                                           pubkeydata_len,
@@ -3097,7 +3105,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 #if LIBSSH2_DSA
     if(strcmp("ssh-dss", (const char *)buf) == 0) {
         if(key_type == NULL || strcmp("ssh-dss", key_type) == 0) {
-            rc = gen_publickey_from_dsa_openssh_priv_data(session, decrypted,
+            rc = gen_publickey_from_dsa_openssh_priv_data(session, &decrypted,
                                                          method, method_len,
                                                           pubkeydata,
                                                           pubkeydata_len,
@@ -3112,7 +3120,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
    if(_libssh2_ecdsa_curve_type_from_name((const char *)buf, &type) == 0) {
        if(key_type == NULL || strcmp("ssh-ecdsa", key_type) == 0) {
            rc = gen_publickey_from_ecdsa_openssh_priv_data(session, type,
-                                                           decrypted,
+                                                           &decrypted,
                                                            method, method_len,
                                                            pubkeydata,
                                                            pubkeydata_len,
@@ -3122,8 +3130,7 @@ _libssh2_pub_priv_openssh_keyfilememory(LIBSSH2_SESSION *session,
 }
 #endif
 
-    if(decrypted)
-        _libssh2_string_buf_free(session, decrypted);
+    ssh2_buf_dispose(&_decrypted);
 
     return rc;
 }
