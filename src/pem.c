@@ -363,7 +363,7 @@ static int
 _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
                                 const unsigned char *passphrase,
                                 const char *b64data, size_t b64datalen,
-                                struct string_buf **decrypted_buf)
+                                ssh2_buf *out_decrypted)
 {
     const LIBSSH2_CRYPT_METHOD *method = NULL;
     struct string_buf decoded, decrypted, kdf_buf;
@@ -381,9 +381,6 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
     unsigned int f_len = 0;
     int ret = 0, keylen = 0, ivlen = 0, total_len = 0;
     size_t kdf_len = 0, tmp_len = 0, salt_len = 0;
-
-    if(decrypted_buf)
-        *decrypted_buf = NULL;
 
     /* decode file */
     if(libssh2_base64_decode(session, (char **)&f, &f_len,
@@ -608,30 +605,21 @@ _libssh2_openssh_pem_parse_data(LIBSSH2_SESSION * session,
        goto out;
     }
 
-    if(decrypted_buf != NULL) {
+    if(out_decrypted != NULL) {
+        ssh2_buf out_buf = SSH2_BUF_SECINIT_SESSION(session);
+
+        ssh2_buf_attach_(&out_buf,
+                         decrypted.dataptr,
+                         decrypted.len - (decrypted.dataptr - decrypted.data),
+                         session);
+
         /* copy data to out-going buffer */
-        struct string_buf *out_buf = _libssh2_string_buf_new(session);
-        if(!out_buf) {
+        if(ssh2_buf_cpy(out_decrypted, &out_buf) != 0) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Unable to allocate memory for "
                                  "decrypted struct");
             goto out;
         }
-
-        out_buf->data = LIBSSH2_CALLOC(session, decrypted.len);
-        if(out_buf->data == NULL) {
-            ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
-                                 "Unable to allocate memory for "
-                                 "decrypted struct");
-            _libssh2_string_buf_free(session, out_buf);
-            goto out;
-        }
-        memcpy(out_buf->data, decrypted.data, decrypted.len);
-        out_buf->dataptr = out_buf->data +
-            (decrypted.dataptr - decrypted.data);
-        out_buf->len = decrypted.len;
-
-        *decrypted_buf = out_buf;
     }
 
 out:
@@ -660,7 +648,7 @@ out:
 int
 _libssh2_openssh_pem_parse(LIBSSH2_SESSION * session,
                            const unsigned char *passphrase,
-                           FILE * fp, struct string_buf **decrypted_buf)
+                           FILE * fp, ssh2_buf *out_decrypted)
 {
     char line[LINE_SIZE];
     char *b64data = NULL;
@@ -714,7 +702,7 @@ _libssh2_openssh_pem_parse(LIBSSH2_SESSION * session,
                                           passphrase,
                                           (const char *)b64data,
                                           (size_t)b64datalen,
-                                          decrypted_buf);
+                                          out_decrypted);
 
     if(b64data) {
         _libssh2_explicit_zero(b64data, b64datalen);
@@ -730,7 +718,7 @@ int
 _libssh2_openssh_pem_parse_memory(LIBSSH2_SESSION * session,
                                   const unsigned char *passphrase,
                                   const char *filedata, size_t filedata_len,
-                                  struct string_buf **decrypted_buf)
+                                  ssh2_buf *out_decrypted)
 {
     char line[LINE_SIZE];
     char *b64data = NULL;
@@ -792,7 +780,7 @@ _libssh2_openssh_pem_parse_memory(LIBSSH2_SESSION * session,
     }
 
     ret = _libssh2_openssh_pem_parse_data(session, passphrase, b64data,
-                                          b64datalen, decrypted_buf);
+                                          b64datalen, out_decrypted);
 
 out:
     if(b64data) {

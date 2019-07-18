@@ -729,29 +729,6 @@ void _libssh2_explicit_zero(void *buf, size_t size)
 
 /* String buffer */
 
-struct string_buf* _libssh2_string_buf_new(LIBSSH2_SESSION *session)
-{
-    struct string_buf *ret;
-
-    ret = _libssh2_calloc(session, sizeof(*ret));
-    if(ret == NULL)
-        return NULL;
-
-    return ret;
-}
-
-void _libssh2_string_buf_free(LIBSSH2_SESSION *session, struct string_buf *buf)
-{
-    if(buf == NULL)
-        return;
-
-    if(buf->data != NULL)
-        LIBSSH2_FREE(session, buf->data);
-
-    LIBSSH2_FREE(session, buf);
-    buf = NULL;
-}
-
 int _libssh2_get_u32(struct string_buf *buf, uint32_t *out)
 {
     if(!_libssh2_check_length(buf, 4)) {
