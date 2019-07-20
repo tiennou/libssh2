@@ -59,16 +59,28 @@ matrix:
         - ./ci/build.sh
         - cd build && cmake --build . --target package
 
+    - name: "Coverity"
+      script:
+        - ./ci/build.sh
+        - ./ci/coverity-build.sh
+        - ./ci/coverity-publish.sh
+
 env:
-  - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=64
-  - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=32
-  - CRYPTO_BACKEND=OpenSSL BACKEND_VERSION=1.0.2s ADDRESS_SIZE=64
-  - CRYPTO_BACKEND=mbedTLS ADDRESS_SIZE=64 LEAK_CHECK=valgrind
-  - CRYPTO_BACKEND=mbedTLS ADDRESS_SIZE=32
-  - CRYPTO_BACKEND=Libgcrypt ADDRESS_SIZE=64
-  - CRYPTO_BACKEND=Libgcrypt ADDRESS_SIZE=32
-  - ENABLE_ZLIB_COMPRESSION=OFF
-  - ENABLE_ZLIB_COMPRESSION=ON
+  global:
+    - COVERITY_PROJECT=tiennou%2Flibssh2
+    - COVERITY_EMAIL=samson.etienne@gmail.com
+    - secure: bNF0lZ2MSWaSrvEKnxuJW3NxTN1jgVbsofNJ2uE1CYEYUUTgk/yVw5bRWefwrbas+2+4xlcb03wPXMEsvDi9nbaFGv4SRAOiLw3g8x3acb5n1PXHFHJw4xE+HSODVyNrWnEpuKSaXCyC2AsSm4evo3+PhqNlUK2rqVeqmOiG4uDTb2WRV1zuJD0vqhV+pe/yY4zl1+DmsXPvMMjN+RSm5e99N5XxNNCeflT6afWS8QZtpvmAihC9F8xaPSFvspjD+0XEeqUwpukHyfrsjQ2S026HW+mrz83rGwsgDgJhIL6c/VO/sbHz4i6bhljpjHM80BdxE+j7sSJ5qg208Z1jODHo7V0G5q5Xyg0x8Ru/u2G4HDQFWAx4qRFnEI1UIJfSrh4N1qfMueUkc0Mkwidy7reooPHVntN/XFAX5//Jo/O/CuKq76hRH+wZhodz6v3GWF5CFcdRoAq/Q7yxubxaNq3Wd3Wyo/x2gVZgXCUL2Wvlt6sYt8AvuhK+E0bc+m/4VKyWaTQZJ04pk4ik8/ieQpnrWde7inEps1lQYXDCbZ62qMRPsH72lchlx7AhieR2e+VREux4k1IIdjEcpWIDY41E87LXbxM/Ic0T3JHdt8uyFQABMU3OaawFMcWWH/eYHtJr0OVCpEY+2VdKodr7tqMK2IYavlslTLo+o/NwRrc=
+
+  matrix:
+    - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=64
+    - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=32
+    - CRYPTO_BACKEND=OpenSSL BACKEND_VERSION=1.0.2s ADDRESS_SIZE=64
+    - CRYPTO_BACKEND=mbedTLS ADDRESS_SIZE=64 LEAK_CHECK=valgrind
+    - CRYPTO_BACKEND=mbedTLS ADDRESS_SIZE=32
+    - CRYPTO_BACKEND=Libgcrypt ADDRESS_SIZE=64
+    - CRYPTO_BACKEND=Libgcrypt ADDRESS_SIZE=32
+    - ENABLE_ZLIB_COMPRESSION=OFF
+    - ENABLE_ZLIB_COMPRESSION=ON
 
 install: ./ci/setup.sh
 
