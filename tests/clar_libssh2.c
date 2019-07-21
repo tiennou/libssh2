@@ -56,6 +56,9 @@ static int run_command_varg(char **output, const char *command, va_list args)
     char command_buf[BUFSIZ];
     char buf[BUFSIZ];
     char *p;
+    char *out = NULL;
+    size_t total_size = 0;
+    ssize_t read_len;
     int ret;
 
     if(output) {
@@ -91,8 +94,27 @@ static int run_command_varg(char **output, const char *command, va_list args)
         return -1;
     }
     p = buf;
-    while(fgets(p, sizeof(buf) - (p - buf), pipe) != NULL)
-        ;
+    p[0] = '\0';
+    while((read_len = fread(p, 1, sizeof(buf), pipe)) > 0) {
+        char *tmp;
+
+        if(!output)
+            continue;
+
+        tmp = realloc(out, total_size + BUFSIZ);
+        if(tmp == NULL) {
+            fprintf(stderr, "Failed to allocate buffer\n");
+            free(out);
+            return -1;
+        }
+        else
+            out = tmp;
+
+        memcpy(out + total_size, p, read_len);
+        total_size += read_len;
+    }
+    if(total_size > 0)
+        out[total_size - 1] = '\0';
 
 #ifdef WIN32
     ret = _pclose(pipe);
@@ -101,18 +123,18 @@ static int run_command_varg(char **output, const char *command, va_list args)
 #endif
     if(ret != 0) {
         fprintf(stderr, "Error running command '%s' (exit %d): %s\n",
-                command, ret, buf);
+                command, ret, out);
     }
 
     if(output) {
         /* command output may contain a trailing newline, so we trim
          * whitespace here */
-        size_t end = strlen(buf);
-        while(end > 0 && isspace(buf[end - 1])) {
-            buf[end - 1] = '\0';
+        size_t end = total_size;
+        while(end > 0 && isspace(out[end - 1])) {
+            out[end - 1] = '\0';
         }
 
-        *output = strdup(buf);
+        *output = out;
     }
     return ret;
 }
@@ -129,15 +151,68 @@ static int run_command(char **output, const char *command, ...)
     return ret;
 }
 
+static int run_command_retry(char **output, const char *command, ...)
+{
+    va_list args;
+    int attempt_no = 0;
+    int wait_time = 500;
+    int rc;
+
+    /* This can be flaky when tests run in parallel (see
+     https://github.com/docker/machine/issues/2612), so we retry a few
+     times with exponential backoff if it fails */
+    for(;;) {
+        va_start(args, command);
+        rc = run_command_varg(output, command, args);
+        va_end(args);
+        if(rc == 0)
+            break;
+
+        if(attempt_no > 5) {
+            fprintf(
+                    stderr,
+                    "Unable to get IP from docker-machine after %d attempts\n",
+                    attempt_no);
+            break;
+        }
+        else {
+#ifdef WIN32
+#pragma warning(push)
+#pragma warning(disable : 4996)
+            _sleep(wait_time);
+#pragma warning(pop)
+#else
+            sleep(wait_time);
+#endif
+            ++attempt_no;
+            wait_time *= 2;
+        }
+    }
+    return rc;
+}
+
+int cl_ssh2_run_command(char **output, const char *command, ...)
+{
+    va_list args;
+    int ret;
+
+    va_start(args, command);
+    ret = run_command_varg(output, command, args);
+    va_end(args);
+
+    return ret;
+}
+
 static int build_openssh_server_docker_image(void)
 {
-    return run_command(NULL, "docker build -t libssh2/openssh_server "
-                             "openssh_server");
+    return run_command_retry(NULL,
+                       "docker build -t libssh2/openssh_server openssh_server"
+                       );
 }
 
 static int start_openssh_server(char **container_id_out)
 {
-    return run_command(container_id_out,
+    return run_command_retry(container_id_out,
                        "docker run "
                        "--detach "
                        "--publish-all "
@@ -149,7 +224,7 @@ static int start_openssh_server(char **container_id_out)
 
 static int stop_openssh_server(char *container_id)
 {
-    return run_command(NULL, "docker stop %s", container_id);
+    return run_command_retry(NULL, "docker stop %s", container_id);
 }
 
 static const char *docker_machine_name(void)
@@ -161,38 +236,12 @@ static int ip_address_from_container(char *container_id, char **ip_address_out)
 {
     const char *active_docker_machine = docker_machine_name();
     if(active_docker_machine != NULL) {
-
-        /* This can be flaky when tests run in parallel (see
-           https://github.com/docker/machine/issues/2612), so we retry a few
-           times with exponential backoff if it fails */
-        int attempt_no = 0;
-        int wait_time = 500;
-        for(;;) {
-            int ret = run_command(ip_address_out, "docker-machine ip %s",
-                                  active_docker_machine);
-            if(ret == 0) {
-                return 0;
-            }
-            else if(attempt_no > 5) {
-                fprintf(
-                    stderr,
-                    "Unable to get IP from docker-machine after %d attempts\n",
-                    attempt_no);
-                return -1;
-            }
-            else {
-#ifdef WIN32
-                Sleep(wait_time);
-#else
-                sleep(wait_time);
-#endif
-                ++attempt_no;
-                wait_time *= 2;
-            }
-        }
+        return run_command_retry(ip_address_out,
+                           "docker-machine ip %s",
+                           active_docker_machine);
     }
     else {
-        return run_command(ip_address_out,
+        return run_command_retry(ip_address_out,
                            "docker inspect --format "
                            "\"{{ index (index (index .NetworkSettings.Ports "
                            "\\\"22/tcp\\\") 0) \\\"HostIp\\\" }}\" %s",
@@ -202,7 +251,7 @@ static int ip_address_from_container(char *container_id, char **ip_address_out)
 
 static int port_from_container(char *container_id, char **port_out)
 {
-    return run_command(port_out,
+    return run_command_retry(port_out,
                        "docker inspect --format "
                        "\"{{ index (index (index .NetworkSettings.Ports "
                        "\\\"22/tcp\\\") 0) \\\"HostPort\\\" }}\" %s",
@@ -254,6 +303,7 @@ static int open_socket_to_container(char *container_id)
         goto cleanup;
     }
 
+    memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons((short)strtol(port_string, NULL, 0));
     sin.sin_addr.s_addr = hostaddr;

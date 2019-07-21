@@ -106,6 +106,7 @@ void cl_ssh2_stop_openssh_fixture(void);
 
 int cl_ssh2_openssh_server_socket(void);
 
+int cl_ssh2_run_command(char **output, const char *command, ...);
 int cl_ssh2_wait_socket(void);
 
 int cl_ssh2_read_file(const char *path, char **buf, size_t *len);
