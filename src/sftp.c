@@ -684,13 +684,13 @@ sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
 
     ssh2_databuf_init(&buf, &attrs_buf);
 
-    if(_libssh2_get_u32(&buf, &flags) != 0) {
+    if(ssh2_databuf_get_u32(&buf, &flags) != 0) {
         return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
     }
     attrs->flags = flags;
 
     if(attrs->flags & LIBSSH2_SFTP_ATTR_SIZE) {
-        if(_libssh2_get_u64(&buf, &(attrs->filesize)) != 0) {
+        if(ssh2_databuf_get_u64(&buf, &(attrs->filesize)) != 0) {
             return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
         }
     }
@@ -698,8 +698,8 @@ sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
     if(attrs->flags & LIBSSH2_SFTP_ATTR_UIDGID) {
         uint32_t uid = 0;
         uint32_t gid = 0;
-        if(_libssh2_get_u32(&buf, &uid) != 0 ||
-           _libssh2_get_u32(&buf, &gid) != 0) {
+        if(ssh2_databuf_get_u32(&buf, &uid) != 0 ||
+           ssh2_databuf_get_u32(&buf, &gid) != 0) {
             return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
         }
         attrs->uid = uid;
@@ -708,7 +708,7 @@ sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
 
     if(attrs->flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) {
         uint32_t permissions;
-        if(_libssh2_get_u32(&buf, &permissions) != 0) {
+        if(ssh2_databuf_get_u32(&buf, &permissions) != 0) {
             return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
         }
         attrs->permissions = permissions;
@@ -717,8 +717,8 @@ sftp_bin2attr(LIBSSH2_SFTP_ATTRIBUTES *attrs, const unsigned char *p,
     if(attrs->flags & LIBSSH2_SFTP_ATTR_ACMODTIME) {
         uint32_t atime;
         uint32_t mtime;
-        if(_libssh2_get_u32(&buf, &atime) != 0 ||
-           _libssh2_get_u32(&buf, &mtime) != 0) {
+        if(ssh2_databuf_get_u32(&buf, &atime) != 0 ||
+           ssh2_databuf_get_u32(&buf, &mtime) != 0) {
             return LIBSSH2_ERROR_BUFFER_TOO_SMALL;
         }
         attrs->atime = atime;
@@ -924,7 +924,7 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
 
     endp = &buf.data[data_len];
 
-    if(_libssh2_get_u32(&buf, &(sftp_handle->version)) != 0) {
+    if(ssh2_databuf_get_u32(&buf, &(sftp_handle->version)) != 0) {
         LIBSSH2_FREE(session, data);
         rc = LIBSSH2_ERROR_BUFFER_TOO_SMALL;
         goto sftp_init_error;
@@ -942,14 +942,14 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
     while(buf.data < endp) {
         unsigned char *extname, *extdata;
 
-        if(_libssh2_get_string(&buf, &extname, NULL)) {
+        if(ssh2_databuf_get_ptr(&buf, &extname, NULL)) {
             LIBSSH2_FREE(session, data);
             _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                            "Data too short when extracting extname");
             goto sftp_init_error;
         }
 
-        if(_libssh2_get_string(&buf, &extdata, NULL)) {
+        if(ssh2_databuf_get_ptr(&buf, &extdata, NULL)) {
             LIBSSH2_FREE(session, data);
             _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                            "Data too short when extracting extdata");

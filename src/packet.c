@@ -98,35 +98,35 @@ packet_queue_listener(LIBSSH2_SESSION * session, unsigned char *data,
 
         ssh2_databuf_advance(&buf, offset);
 
-        if(_libssh2_get_u32(&buf, &(listen_state->sender_channel))) {
+        if(ssh2_databuf_get_u32(&buf, &(listen_state->sender_channel))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting channel");
         }
-        if(_libssh2_get_u32(&buf, &(listen_state->initial_window_size))) {
+        if(ssh2_databuf_get_u32(&buf, &(listen_state->initial_window_size))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting window size");
         }
-        if(_libssh2_get_u32(&buf, &(listen_state->packet_size))) {
+        if(ssh2_databuf_get_u32(&buf, &(listen_state->packet_size))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting packet");
         }
-        if(_libssh2_get_string(&buf, &(listen_state->host), &temp_len)) {
+        if(ssh2_databuf_get_ptr(&buf, &(listen_state->host), &temp_len)) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting host");
         }
         listen_state->host_len = (uint32_t)temp_len;
 
-        if(_libssh2_get_u32(&buf, &(listen_state->port))) {
+        if(ssh2_databuf_get_u32(&buf, &(listen_state->port))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting port");
         }
-        if(_libssh2_get_string(&buf, &(listen_state->shost), &temp_len)) {
+        if(ssh2_databuf_get_ptr(&buf, &(listen_state->shost), &temp_len)) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting shost");
         }
         listen_state->shost_len = (uint32_t)temp_len;
 
-        if(_libssh2_get_u32(&buf, &(listen_state->sport))) {
+        if(ssh2_databuf_get_u32(&buf, &(listen_state->sport))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
                                   "Data too short extracting sport");
         }
@@ -309,25 +309,25 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
 
         ssh2_databuf_advance(&buf, offset);
 
-        if(_libssh2_get_u32(&buf, &(x11open_state->sender_channel))) {
+        if(ssh2_databuf_get_u32(&buf, &(x11open_state->sender_channel))) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
                            "unexpected sender channel size");
             failure_code = SSH_OPEN_CONNECT_FAILED;
             goto x11_exit;
         }
-        if(_libssh2_get_u32(&buf, &(x11open_state->initial_window_size))) {
+        if(ssh2_databuf_get_u32(&buf, &(x11open_state->initial_window_size))) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
                            "unexpected window size");
             failure_code = SSH_OPEN_CONNECT_FAILED;
             goto x11_exit;
         }
-        if(_libssh2_get_u32(&buf, &(x11open_state->packet_size))) {
+        if(ssh2_databuf_get_u32(&buf, &(x11open_state->packet_size))) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
                            "unexpected window size");
             failure_code = SSH_OPEN_CONNECT_FAILED;
             goto x11_exit;
         }
-        if(_libssh2_get_string(&buf, &(x11open_state->shost), &temp_len)) {
+        if(ssh2_databuf_get_ptr(&buf, &(x11open_state->shost), &temp_len)) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
                            "unexpected host size");
             failure_code = SSH_OPEN_CONNECT_FAILED;
@@ -335,7 +335,7 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
         }
         x11open_state->shost_len = (uint32_t)temp_len;
 
-        if(_libssh2_get_u32(&buf, &(x11open_state->sport))) {
+        if(ssh2_databuf_get_u32(&buf, &(x11open_state->sport))) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
                            "unexpected port size");
             failure_code = SSH_OPEN_CONNECT_FAILED;
@@ -532,9 +532,9 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
 
                 ssh2_databuf_advance(&buf, 1); /* advance past type */
 
-                _libssh2_get_u32(&buf, &reason);
-                _libssh2_get_string(&buf, &message, &message_len);
-                _libssh2_get_string(&buf, &language, &language_len);
+                ssh2_databuf_get_u32(&buf, &reason);
+                ssh2_databuf_get_ptr(&buf, &message, &message_len);
+                ssh2_databuf_get_ptr(&buf, &language, &language_len);
 
 
                 if(session->ssh_msg_disconnect) {
@@ -586,8 +586,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                     /* advance past type & always display */
                     ssh2_databuf_advance(&buf, 2);
 
-                    _libssh2_get_string(&buf, &message, &message_len);
-                    _libssh2_get_string(&buf, &language, &language_len);
+                    ssh2_databuf_get_ptr(&buf, &message, &message_len);
+                    ssh2_databuf_get_ptr(&buf, &language, &language_len);
                 }
 
                 if(session->ssh_msg_debug) {

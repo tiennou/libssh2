@@ -71,3 +71,31 @@ void test_core_databuf__puts(void)
     cl_check(memcmp(&data, ssh2_buf_ptr(&g_buf), sizeof(data)) == 0);
     cl_assert_equal_i(4 + strlen(NICE_STRING), ssh2_buf_size(&g_buf));
 }
+
+void test_core_databuf__get_u32(void)
+{
+    const uint8_t raw_data[] = {'\0','\0','\x1f','\xff'};
+    ssh2_buf buf = SSH2_BUF_CONST((unsigned char *)raw_data, sizeof(raw_data));
+    ssh2_databuf rd = SSH2_DATABUF_INIT(&buf);
+    uint32_t out_int;
+
+    cl_must_pass(ssh2_databuf_get_u32(&rd, &out_int));
+    cl_assert_equal_i(1, ssh2_databuf_size(&rd));
+    cl_assert_equal_i(out_int, 0);
+}
+
+void test_core_databuf__get_string(void)
+{
+    const uint8_t raw_data[] = {'\0','\0','\0','\x10','t','h','i','s','-',
+        'n','i','c','e','-','s','t','r','i','n','g'};
+    const uint8_t data[] = {'t','h','i','s','-','n','i','c','e','-',
+        's','t','r','i','n','g'};
+    ssh2_buf buf = SSH2_BUF_CONST((unsigned char *)raw_data, sizeof(raw_data));
+    ssh2_databuf rd = SSH2_DATABUF_INIT(&buf);
+    char *out_str;
+    size_t out_len;
+
+    cl_must_pass(ssh2_databuf_get_string(&rd, &out_str, &out_len));
+    cl_assert_equal_i(strlen(NICE_STRING), out_len);
+    cl_check(memcmp(data, out_str, sizeof(data)) == 0);
+}
