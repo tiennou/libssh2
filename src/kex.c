@@ -78,35 +78,6 @@ static inline int kex_method_hash(unsigned char **out_value,
     return 0;
 }
 
-static inline ec_curve_value_hash(unsigned char **value,
-                                  LIBSSH2_SESSION *session,
-                                  kmdhgGPshakex_state_t *exchange_state,
-                                  libssh2_curve_type curve_type,
-                                  size_t reqlen,
-                                  const char *version)
-{
-    libssh2_digest_algorithm algo = 0;
-    switch(curve_type) {
-        case LIBSSH2_EC_CURVE_NISTP256:
-            algo = libssh2_digest_SHA256;
-            break;
-
-        case LIBSSH2_EC_CURVE_NISTP384:
-            algo = libssh2_digest_SHA384;
-            break;
-
-        case LIBSSH2_EC_CURVE_NISTP521:
-            algo = libssh2_digest_SHA512;
-            break;
-
-        default:
-            return -1;
-    }
-
-    return kex_method_hash(value, session, exchange_state,
-                           algo, reqlen, version);
-}
-
 /*
  * diffie_hellman
  *
@@ -1037,26 +1008,29 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
  */
 
 static int
-kex_session_ecdh_curve_type(const char *name, libssh2_curve_type *out_type)
+kex_session_ecdh_curve_type(const char *name,
+                            libssh2_curve_type *out_type,
+                            libssh2_digest_algorithm *out_algo)
 {
     int ret = 0;
-    libssh2_curve_type type;
 
-    if(name == NULL)
+    if(name == NULL || out_type == NULL || out_algo == NULL)
         return -1;
 
-    if(strcmp(name, "ecdh-sha2-nistp256") == 0)
-        type = LIBSSH2_EC_CURVE_NISTP256;
-    else if(strcmp(name, "ecdh-sha2-nistp384") == 0)
-        type = LIBSSH2_EC_CURVE_NISTP384;
-    else if(strcmp(name, "ecdh-sha2-nistp521") == 0)
-        type = LIBSSH2_EC_CURVE_NISTP521;
+    if(strcmp(name, "ecdh-sha2-nistp256") == 0) {
+        *out_type = LIBSSH2_EC_CURVE_NISTP256;
+        *out_algo = libssh2_digest_SHA256;
+    }
+    else if(strcmp(name, "ecdh-sha2-nistp384") == 0) {
+        *out_type = LIBSSH2_EC_CURVE_NISTP384;
+        *out_algo = libssh2_digest_SHA384;
+    }
+    else if(strcmp(name, "ecdh-sha2-nistp521") == 0) {
+        *out_type = LIBSSH2_EC_CURVE_NISTP521;
+        *out_algo = libssh2_digest_SHA512;
+    }
     else {
         ret = -1;
-    }
-
-    if(ret == 0 && out_type) {
-        *out_type = type;
     }
 
     return ret;
@@ -1080,11 +1054,11 @@ kex_session_ecdh_curve_type(const char *name, libssh2_curve_type *out_type)
  *
  */
 
-#define LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(digest_type)       \
+#define LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(algo)              \
 {                                                                       \
     libssh2_digest_ctx ctx;                                             \
     exchange_state->exchange_hash = (void *)&ctx;                       \
-    libssh2_digest_init(&ctx, libssh2_digest_SHA##digest_type);         \
+    libssh2_digest_init(&ctx, algo);         \
     if(session->local.banner) {                                         \
         _libssh2_htonu32(exchange_state->h_sig_comp,                    \
                          strlen((char *) session->local.banner) - 2);   \
@@ -1141,7 +1115,7 @@ kex_session_ecdh_curve_type(const char *name, libssh2_curve_type *out_type)
     if(session->hostkey->                                               \
        sig_verify(session, exchange_state->h_sig,                       \
                   exchange_state->h_sig_len, exchange_state->h_sig_comp, \
-                  SHA##digest_type##_DIGEST_LENGTH,                     \
+                  libssh2_digest_size(algo),                            \
                   &session->server_hostkey_abstract)) {                 \
         rc = -1;                                                        \
     }                                                                   \
@@ -1152,7 +1126,7 @@ kex_session_ecdh_curve_type(const char *name, libssh2_curve_type *out_type)
  * Elliptic Curve Diffie Hellman Key Exchange
  */
 
-static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
+static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_digest_algorithm algo,
                            unsigned char *data, size_t data_len,
                            unsigned char *public_key,
                            size_t public_key_len, _libssh2_ec_key *private_key,
@@ -1343,19 +1317,7 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
         }
 
         /* verify hash */
-
-        switch(type) {
-            case LIBSSH2_EC_CURVE_NISTP256:
-                LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(256);
-                break;
-
-            case LIBSSH2_EC_CURVE_NISTP384:
-                LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(384);
-                break;
-            case LIBSSH2_EC_CURVE_NISTP521:
-                LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(512);
-                break;
-        }
+        LIBSSH2_KEX_METHOD_EC_SHA_HASH_CREATE_VERIFY(algo);
 
         if(rc != 0) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_SIGN,
@@ -1405,20 +1367,7 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
 
         if(!session->session_id) {
 
-            size_t digest_length = 0;
-
-            if(type == LIBSSH2_EC_CURVE_NISTP256)
-                digest_length = SHA256_DIGEST_LENGTH;
-            else if(type == LIBSSH2_EC_CURVE_NISTP384)
-                digest_length = SHA384_DIGEST_LENGTH;
-            else if(type == LIBSSH2_EC_CURVE_NISTP521)
-                digest_length = SHA512_DIGEST_LENGTH;
-            else{
-                ret = _libssh2_error(session, LIBSSH2_ERROR_KEX_FAILURE,
-                                     "Unknown SHA digest for EC curve");
-                goto clean_exit;
-
-            }
+            size_t digest_length = libssh2_digest_size(algo);
             session->session_id = LIBSSH2_ALLOC(session, digest_length);
             if(!session->session_id) {
                 ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
@@ -1444,14 +1393,14 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
             unsigned char *iv = NULL, *secret = NULL;
             int free_iv = 0, free_secret = 0;
 
-            ec_curve_value_hash(&iv, session, exchange_state, type,
+            kex_method_hash(&iv, session, exchange_state, algo,
                                 session->local.crypt->iv_len, "A");
             if(!iv) {
                 ret = -1;
                 goto clean_exit;
             }
 
-            ec_curve_value_hash(&secret, session, exchange_state, type,
+            kex_method_hash(&secret, session, exchange_state, algo,
                                 session->local.crypt->secret_len, "C");
 
             if(!secret) {
@@ -1492,14 +1441,14 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
             unsigned char *iv = NULL, *secret = NULL;
             int free_iv = 0, free_secret = 0;
 
-            ec_curve_value_hash(&iv, session, exchange_state, type,
+            kex_method_hash(&iv, session, exchange_state, algo,
                                 session->remote.crypt->iv_len, "B");
 
             if(!iv) {
                 ret = LIBSSH2_ERROR_KEX_FAILURE;
                 goto clean_exit;
             }
-            ec_curve_value_hash(&secret, session, exchange_state, type,
+            kex_method_hash(&secret, session, exchange_state, algo,
                                 session->remote.crypt->secret_len, "D");
 
             if(!secret) {
@@ -1538,7 +1487,7 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
             unsigned char *key = NULL;
             int free_key = 0;
 
-            ec_curve_value_hash(&key, session, exchange_state, type,
+            kex_method_hash(&key, session, exchange_state, algo,
                                 session->local.mac->key_len, "E");
 
             if(!key) {
@@ -1564,7 +1513,7 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,
             unsigned char *key = NULL;
             int free_key = 0;
 
-            ec_curve_value_hash(&key, session, exchange_state, type,
+            kex_method_hash(&key, session, exchange_state, algo,
                                 session->remote.mac->key_len, "F");
 
             if(!key) {
@@ -1645,16 +1594,16 @@ kex_method_ecdh_key_exchange
     int ret = 0;
     int rc = 0;
     unsigned char *s;
-    libssh2_curve_type type;
+    libssh2_curve_type curve;
+    libssh2_digest_algorithm algo;
 
     if(key_state->state == libssh2_NB_state_idle) {
-
         key_state->public_key_oct = NULL;
         key_state->state = libssh2_NB_state_created;
     }
 
     if(key_state->state == libssh2_NB_state_created) {
-        rc = kex_session_ecdh_curve_type(session->kex->name, &type);
+        rc = kex_session_ecdh_curve_type(session->kex->name, &curve, &algo);
 
         if(rc != 0) {
             ret = _libssh2_error(session, -1,
@@ -1664,7 +1613,7 @@ kex_method_ecdh_key_exchange
 
         rc = _libssh2_ecdsa_create_key(session, &key_state->private_key,
                                        &key_state->public_key_oct,
-                                       &key_state->public_key_oct_len, type);
+                                       &key_state->public_key_oct_len, curve);
 
         if(rc != 0) {
             ret = _libssh2_error(session, rc,
@@ -1716,10 +1665,10 @@ kex_method_ecdh_key_exchange
     }
 
     if(key_state->state == libssh2_NB_state_sent2) {
+        /* We rely on that check having been done correctly beforehand */
+        (void)kex_session_ecdh_curve_type(session->kex->name, &curve, &algo);
 
-        (void)kex_session_ecdh_curve_type(session->kex->name, &type);
-
-        ret = ecdh_sha2_nistp(session, type, key_state->data,
+        ret = ecdh_sha2_nistp(session, algo, key_state->data,
                               key_state->data_len,
                               (unsigned char *)key_state->public_key_oct,
                               key_state->public_key_oct_len,
