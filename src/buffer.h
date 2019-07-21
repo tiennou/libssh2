@@ -140,7 +140,7 @@ struct ssh2_databuf {
 static inline void ssh2_databuf_init_buf(ssh2_databuf *buf,
                                          const ssh2_buf *_buf)
 {
-    ssh2_buf_cpy(&buf->buf, _buf);
+    memcpy(buf, _buf, sizeof(*_buf));
     buf->buf.flags |= SSH2_BUF_FLAG_DATABUF;
     buf->data = ssh2_buf_ptr(&buf->buf);
 }

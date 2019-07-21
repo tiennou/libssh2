@@ -153,6 +153,6 @@ void ssh2_databuf_dispose(ssh2_databuf *buf)
     if(buf == NULL)
         return;
 
-    ssh2_buf_dispose(&buf->buf);
+//    ssh2_buf_dispose(&buf->buf);
     buf->data = NULL;
 }
