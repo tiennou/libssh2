@@ -39,3 +39,24 @@ void test_core_buffer__random(void)
 
     ssh2_buf_dispose(&buf);
 }
+
+void test_core_buffer__zero(void)
+{
+    ssh2_buf buf = SSH2_BUF_INIT_SESSION(g_session);
+
+#ifndef LIBSSH2_SECURE_ZERO
+    cl_skip();
+#endif
+
+    cl_must_pass(ssh2_buf_random(&buf, 5));
+    cl_assert_equal_i(5, ssh2_buf_size(&buf));
+    ssh2_buf_zero(&buf);
+
+    cl_assert_equal_i(0, buf.ptr[0]);
+    cl_assert_equal_i(0, buf.ptr[1]);
+    cl_assert_equal_i(0, buf.ptr[2]);
+    cl_assert_equal_i(0, buf.ptr[3]);
+    cl_assert_equal_i(0, buf.ptr[4]);
+
+    ssh2_buf_dispose(&buf);
+}
