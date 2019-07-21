@@ -260,23 +260,24 @@ typedef struct kmdhgGPshakex_state_t
     libssh2_nonblocking_states state;
     unsigned char *e_packet;
     unsigned char *s_packet;
-    unsigned char *tmp;
-    unsigned char h_sig_comp[MAX_SHA_DIGEST_LEN];
+    unsigned char *tmp; /* 1-byte NEWKEYS response */
+    unsigned char h_sig_comp[MAX_SHA_DIGEST_LEN]; /* the final hash for the DH
+                                                   * signature verification */
     unsigned char c;
     size_t e_packet_len;
     size_t s_packet_len;
     size_t tmp_len;
     _libssh2_bn_ctx *ctx;
     _libssh2_dh_ctx x;
-    _libssh2_bn *e;
-    _libssh2_bn *f;
-    _libssh2_bn *k;
-    unsigned char *f_value;
-    unsigned char *k_value;
-    unsigned char *h_sig;
+    _libssh2_bn *e; /* client pkey */
+    _libssh2_bn *f; /* server pkey */
+    _libssh2_bn *k; /* shared secret */
+    unsigned char *f_value; /* DH-SHA */
+    unsigned char *k_value; /* DH-SHA / ECDH-SHA */
+    unsigned char *h_sig; /* Host sig */
     size_t f_value_len;
     size_t k_value_len;
-    size_t h_sig_len;
+    size_t h_sig_len; /* Host sig length */
     packet_require_state_t req_state;
     libssh2_nonblocking_states burn_state;
 } kmdhgGPshakex_state_t;
@@ -286,10 +287,11 @@ typedef struct key_exchange_state_low_t
     libssh2_nonblocking_states state;
     packet_require_state_t req_state;
     kmdhgGPshakex_state_t exchange_state;
-    _libssh2_bn *p;             /* SSH2 defined value (p_value) */
-    _libssh2_bn *g;             /* SSH2 defined value (2) */
-    unsigned char request[256]; /* Must fit EC_MAX_POINT_LEN + data */
-    unsigned char *data;
+    _libssh2_bn *p;             /* DH, SSH2 defined value (p_value) */
+    _libssh2_bn *g;             /* DH, SSH2 defined value (2) */
+    unsigned char request[256]; /* ECDH/Ed25519,
+                                 * Must fit EC_MAX_POINT_LEN + data */
+    unsigned char *data; /* Server NEWKEYS response */
     size_t request_len;
     size_t data_len;
     _libssh2_ec_key *private_key;   /* SSH2 ecdh private key */
