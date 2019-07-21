@@ -39,17 +39,27 @@
 #ifndef __LIBSSH2_BUFFER_H
 #define __LIBSSH2_BUFFER_H
 
+typedef enum {
+    SSH2_BUF_FLAG_ZERO_ON_CLEAR = 1
+} ssh2_buf_flags;
+
 typedef struct ssh2_buf {
     unsigned char *ptr;
     size_t size;
     size_t asize;
     LIBSSH2_SESSION *session;
+    unsigned int flags;
 } ssh2_buf;
 
-#define SSH2_BUF_INIT { NULL, 0, 0, NULL }
-#define SSH2_BUF_INIT_SESSION(s) { NULL, 0, 0, (s) }
-#define SSH2_BUF_CONST(data, size) { (data), (size), 0, NULL }
-#define SSH2_BUF_CSTR(str) { (str), strlen(str), 0, NULL }
+#define SSH2_BUF_INIT { NULL, 0, 0, NULL, 0 }
+#define SSH2_BUF_INIT_SESSION(s) { NULL, 0, 0, (s),  0 }
+#define SSH2_BUF_CONST(data, size) { (data), (size), 0, NULL, 0 }
+#define SSH2_BUF_CSTR(str) { (str), strlen(str), 0, NULL, 0 }
+
+#define SSH2_BUF_SECINIT \
+    { NULL, 0, 0, NULL, SSH2_BUF_FLAG_ZERO_ON_CLEAR }
+#define SSH2_BUF_SECINIT_SESSION(s) \
+    { NULL, 0, 0, (s), SSH2_BUF_FLAG_ZERO_ON_CLEAR }
 
 static inline void ssh2_buf_init_unowned(ssh2_buf *buf,
                                         unsigned char *data, size_t size)
@@ -106,5 +116,6 @@ void ssh2_buf_dispose(ssh2_buf *buf);
 void ssh2_buf_swap(ssh2_buf *buf, ssh2_buf *swp);
 
 int ssh2_buf_random(ssh2_buf *buf, size_t len);
+void ssh2_buf_zero(ssh2_buf *buf);
 
 #endif

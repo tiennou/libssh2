@@ -41,6 +41,8 @@
 
 void ssh2_buf_clear(ssh2_buf *buf)
 {
+    if(buf->flags & SSH2_BUF_FLAG_ZERO_ON_CLEAR)
+        ssh2_buf_zero(buf);
     buf->size = 0;
 }
 
@@ -122,4 +124,9 @@ int ssh2_buf_random(ssh2_buf *buf, size_t len)
     _libssh2_random(buf->ptr + buf->size, len);
     buf->size += len;
     return 0;
+}
+
+void ssh2_buf_zero(ssh2_buf *buf)
+{
+    _libssh2_explicit_zero(buf->ptr, buf->size);
 }
