@@ -208,3 +208,142 @@ int ssh2_databuf_put_u32(ssh2_databuf *buf, uint32_t value)
     buf->buf.size += sizeof(value);
     return 0;
 }
+
+int ssh2_databuf_get_u32(ssh2_databuf *buf, uint32_t *out)
+{
+    if(!ssh2_databuf_check_length(buf, 4)) {
+        return -1;
+    }
+
+    *out = _libssh2_ntohu32(buf->data);
+    buf->data += 4;
+    return 0;
+}
+
+int ssh2_databuf_get_u64(ssh2_databuf *buf, libssh2_uint64_t *out)
+{
+    if(!ssh2_databuf_check_length(buf, 8)) {
+        return -1;
+    }
+
+    *out = _libssh2_ntohu64(buf->data);
+    buf->data += 8;
+    return 0;
+}
+
+int ssh2_databuf_match_string(ssh2_databuf *buf, const char *match)
+{
+    char *out;
+    size_t len = 0;
+    if(ssh2_databuf_get_string(buf, &out, &len) || len != strlen(match) ||
+       strncmp((char *)out, match, strlen(match)) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int ssh2_databuf_get_ptr(ssh2_databuf *buf,
+                         unsigned char **out_ptr, size_t *out_len)
+{
+    uint32_t data_len;
+    if(ssh2_databuf_get_u32(buf, &data_len) != 0) {
+        return -1;
+    }
+    if(!ssh2_databuf_check_length(buf, data_len)) {
+        return -1;
+    }
+
+    if(out_ptr)
+        *out_ptr = ssh2_databuf_ptr(buf);
+    if(out_len)
+        *out_len = (size_t)data_len;
+
+    ssh2_databuf_advance(buf, data_len);
+
+    return 0;
+}
+
+int ssh2_databuf_get_buf(ssh2_databuf *buf, ssh2_buf *out)
+{
+    size_t data_len;
+    unsigned char *data;
+    if(ssh2_databuf_get_ptr(buf, &data, &data_len) != 0) {
+        return -1;
+    }
+
+    ssh2_buf_attach_(out, buf->data, data_len, NULL);
+
+    return 0;
+}
+
+int ssh2_databuf_get_string(ssh2_databuf *buf, char **out_ptr, size_t *out_len)
+{
+    return ssh2_databuf_get_ptr(buf, (unsigned char **)out_ptr, out_len);
+}
+
+int ssh2_databuf_copy_ptr(LIBSSH2_SESSION *session, ssh2_databuf *buf,
+                          unsigned char **outbuf, size_t *outlen)
+{
+    size_t str_len;
+    unsigned char *str;
+
+    if(ssh2_databuf_get_ptr(buf, &str, &str_len)) {
+        return -1;
+    }
+
+    *outbuf = LIBSSH2_ALLOC(session, str_len);
+    if(*outbuf) {
+        memcpy(*outbuf, str, str_len);
+    }
+    else {
+        return -1;
+    }
+
+    if(outlen)
+        *outlen = str_len;
+
+    return 0;
+}
+
+int ssh2_databuf_get_bn(ssh2_databuf *buf, unsigned char **outbuf,
+                        size_t *outlen)
+{
+    uint32_t data_len;
+    uint32_t bn_len;
+    unsigned char *bnptr;
+
+    if(ssh2_databuf_get_u32(buf, &data_len)) {
+        return -1;
+    }
+    if(!ssh2_databuf_check_length(buf, data_len)) {
+        return -1;
+    }
+
+    bn_len = data_len;
+    bnptr = buf->data;
+
+    /* trim leading zeros */
+    while(bn_len > 0 && *bnptr == 0x00) {
+        bn_len--;
+        bnptr++;
+    }
+
+    *outbuf = bnptr;
+    buf->data += data_len;
+
+    if(outlen)
+        *outlen = (size_t)bn_len;
+
+    return 0;
+}
+
+/* Given the current location in buf, _libssh2_check_length ensures
+ callers can read the next len number of bytes out of the buffer
+ before reading the buffer content */
+
+int ssh2_databuf_check_length(ssh2_databuf *buf, size_t len)
+{
+    unsigned char *endp = ssh2_buf_data(&buf->buf);
+    size_t left = endp - ssh2_databuf_data(buf);
+    return ((len <= left) && (left <= ssh2_databuf_size(buf)));
+}

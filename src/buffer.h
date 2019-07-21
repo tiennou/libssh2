@@ -186,4 +186,19 @@ int ssh2_databuf_puts(ssh2_databuf *buf, const char *str);
 int ssh2_databuf_put_u8(ssh2_databuf *buf, uint8_t value);
 int ssh2_databuf_put_u32(ssh2_databuf *buf, uint32_t value);
 
+int ssh2_databuf_check_length(ssh2_databuf *buf, size_t requested_len);
+int ssh2_databuf_get_u32(ssh2_databuf *buf, uint32_t *out);
+int ssh2_databuf_get_u64(ssh2_databuf *buf, libssh2_uint64_t *out);
+int ssh2_databuf_get_buf(ssh2_databuf *buf, ssh2_buf *out);
+int ssh2_databuf_get_ptr(ssh2_databuf *buf, unsigned char **outbuf,
+                         size_t *outlen);
+int ssh2_databuf_get_string(ssh2_databuf *buf, char **outbuf,
+                            size_t *outlen);
+int ssh2_databuf_match_string(ssh2_databuf *buf, const char *match);
+int ssh2_databuf_copy_buf(ssh2_databuf *buf, ssh2_buf *out_buf);
+int ssh2_databuf_copy_ptr(LIBSSH2_SESSION *session, ssh2_databuf *buf,
+                          unsigned char **outbuf, size_t *outlen);
+int ssh2_databuf_get_bn(ssh2_databuf *buf, unsigned char **outbuf,
+                        size_t *outlen);
+
 #endif

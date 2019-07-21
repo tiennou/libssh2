@@ -270,7 +270,7 @@ static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
         if(session->server_hostkey)
             LIBSSH2_FREE(session, session->server_hostkey);
 
-        if(_libssh2_copy_string(session, &buf, &(session->server_hostkey),
+        if(ssh2_databuf_copy_ptr(session, &buf, &(session->server_hostkey),
                                 &host_key_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Could not copy host key");
@@ -375,7 +375,7 @@ static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
             goto clean_exit;
         }
 
-        if(_libssh2_get_string(&buf, &(exchange_state->f_value),
+        if(ssh2_databuf_get_ptr(&buf, &(exchange_state->f_value),
                                &(exchange_state->f_value_len))) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unable to get f value");
@@ -386,7 +386,7 @@ static int diffie_hellman_sha1(LIBSSH2_SESSION *session,
             exchange_state->f_value,
             exchange_state->f_value_len);
 
-        if(_libssh2_get_string(&buf, &(exchange_state->h_sig),
+        if(ssh2_databuf_get_ptr(&buf, &(exchange_state->h_sig),
                                &(exchange_state->h_sig_len))) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unable to get h sig");
@@ -963,7 +963,7 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
         if(session->server_hostkey)
             LIBSSH2_FREE(session, session->server_hostkey);
 
-        if(_libssh2_copy_string(session, &buf, &(session->server_hostkey),
+        if(ssh2_databuf_copy_ptr(session, &buf, &(session->server_hostkey),
                                 &host_key_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,
                                  "Could not copy host key");
@@ -1067,7 +1067,7 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
             goto clean_exit;
         }
 
-        if(_libssh2_get_string(&buf, &(exchange_state->f_value),
+        if(ssh2_databuf_get_ptr(&buf, &(exchange_state->f_value),
                                &(exchange_state->f_value_len))) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unable to get f value");
@@ -1078,7 +1078,7 @@ static int diffie_hellman_sha256(LIBSSH2_SESSION *session,
             exchange_state->f_value,
             exchange_state->f_value_len);
 
-        if(_libssh2_get_string(&buf, &(exchange_state->h_sig),
+        if(ssh2_databuf_get_ptr(&buf, &(exchange_state->h_sig),
                                &(exchange_state->h_sig_len))) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unable to get h sig");
@@ -1720,13 +1720,13 @@ kex_method_diffie_hellman_group_exchange_sha1_key_exchange
         ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
         ssh2_databuf_advance(&buf, 1); /* increment to big num */
 
-        if(_libssh2_get_bignum_bytes(&buf, &p, &p_len)) {
+        if(ssh2_databuf_get_bn(&buf, &p, &p_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected value");
             goto dh_gex_clean_exit;
         }
 
-        if(_libssh2_get_bignum_bytes(&buf, &g, &g_len)) {
+        if(ssh2_databuf_get_bn(&buf, &g, &g_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected value");
             goto dh_gex_clean_exit;
@@ -1844,13 +1844,13 @@ kex_method_diffie_hellman_group_exchange_sha256_key_exchange
         ssh2_databuf_init_unowned(&buf, key_state->data, key_state->data_len);
         ssh2_databuf_advance(&buf, 1); /* increment to big num */
 
-        if(_libssh2_get_bignum_bytes(&buf, &p, &p_len)) {
+        if(ssh2_databuf_get_bn(&buf, &p, &p_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected value");
             goto dh_gex_clean_exit;
         }
 
-        if(_libssh2_get_bignum_bytes(&buf, &g, &g_len)) {
+        if(ssh2_databuf_get_bn(&buf, &g, &g_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected value");
             goto dh_gex_clean_exit;
@@ -2658,7 +2658,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         ssh2_databuf_init_unowned(&buf, data, data_len);
         ssh2_databuf_advance(&buf, 1); /* advance past packet type */
 
-        if(_libssh2_get_string(&buf, &server_host_key, &hostkey_len)) {
+        if(ssh2_databuf_get_ptr(&buf, &server_host_key, &hostkey_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                  "Unexpected key length");
             goto clean_exit;
@@ -2774,7 +2774,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         }
 
         /* server public key Q_S */
-        if(_libssh2_get_string(&buf, &server_public_key,
+        if(ssh2_databuf_get_ptr(&buf, &server_public_key,
                                &server_public_key_len)) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,
                                      "Unexpected key length");
@@ -2789,7 +2789,7 @@ curve25519_sha256(LIBSSH2_SESSION *session, unsigned char *data,
         }
 
         /* server signature */
-        if(_libssh2_get_string(&buf, &exchange_state->h_sig,
+        if(ssh2_databuf_get_ptr(&buf, &exchange_state->h_sig,
            &(exchange_state->h_sig_len))) {
             ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,
                                  "Unexpected curve25519 server sig length");
