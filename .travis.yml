@@ -59,6 +59,10 @@ matrix:
         - ./ci/build.sh
         - cd build && cmake --build . --target package
 
+    - name: "Fuzz"
+      script:
+        - ./tests/ossfuzz/travisoss.sh
+
 env:
   - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=64
   - CRYPTO_BACKEND=OpenSSL ADDRESS_SIZE=32
