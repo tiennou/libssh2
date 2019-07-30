@@ -257,7 +257,7 @@ typedef struct packet_requirev_state_t
 
 typedef struct kmdhgGPshakex_state_t
 {
-    libssh2_nonblocking_states state;
+    libssh2_nonblocking_states exchange_state;
     unsigned char *e_packet;
     unsigned char *s_packet;
     unsigned char *tmp; /* 1-byte NEWKEYS response */
@@ -267,9 +267,6 @@ typedef struct kmdhgGPshakex_state_t
     size_t e_packet_len;
     size_t s_packet_len;
     size_t tmp_len;
-    _libssh2_bn_ctx *ctx;
-    _libssh2_dh_ctx x;
-    _libssh2_bn *e; /* client pkey */
     _libssh2_bn *f; /* server pkey */
     _libssh2_bn *k; /* shared secret */
     unsigned char *f_value; /* DH-SHA */
@@ -284,11 +281,14 @@ typedef struct kmdhgGPshakex_state_t
 
 typedef struct key_exchange_state_low_t
 {
-    libssh2_nonblocking_states state;
+    libssh2_nonblocking_states gex_state;
     packet_require_state_t req_state;
     kmdhgGPshakex_state_t exchange_state;
     _libssh2_bn *p;             /* DH, SSH2 defined value (p_value) */
     _libssh2_bn *g;             /* DH, SSH2 defined value (2) */
+    _libssh2_bn_ctx *ctx; /* DH, BN context */
+    _libssh2_dh_ctx x; /* DH, crypto context */
+    _libssh2_bn *e; /* DH, client pkey */
     unsigned char request[256]; /* ECDH/Ed25519,
                                  * Must fit EC_MAX_POINT_LEN + data */
     unsigned char *data; /* Server NEWKEYS response */
@@ -308,7 +308,8 @@ typedef struct key_exchange_state_t
 {
     libssh2_nonblocking_states state;
     packet_require_state_t req_state;
-    key_exchange_state_low_t key_state_low;
+//    key_exchange_state_low_t key_state_low;
+    void *kex_abstract; /* _libssh2_kex_session */
     unsigned char *data;
     size_t data_len;
     unsigned char *oldlocal;
@@ -885,14 +886,33 @@ struct _LIBSSH2_SESSION
 /* libssh2 extensible ssh api, ultimately I'd like to allow loading additional
    methods via .so/.dll */
 
+typedef struct _libssh2_kex_session _libssh2_kex_session;
+
 struct _LIBSSH2_KEX_METHOD
 {
     const char *name;
 
+    int (*setup)(_libssh2_kex_session **out_session,
+                 const LIBSSH2_KEX_METHOD *method,
+                 LIBSSH2_SESSION *session);
+
     /* Key exchange, populates session->* and returns 0 on success, non-0 on
-       error */
-    int (*exchange_keys) (LIBSSH2_SESSION * session,
-                          key_exchange_state_low_t * key_state);
+     error */
+    int (*exchange_keys)(_libssh2_kex_session *session);
+
+    int (*generate_pkey)(ssh2_buf *pubkey, _libssh2_kex_session *session);
+
+    int (*generate_secret)(ssh2_buf *secret,
+                           _libssh2_kex_session *session);
+
+    int (*build_hash)(ssh2_buf *hash,
+                      _libssh2_kex_session *session);
+
+//    int (*write_pubkey)(ssh2_buf *e_packet, _libssh2_kex_session *session);
+//
+//    int (*verify_hostkey)(void *hostkey_abstract,
+//                          ssh2_buf *hostkey,
+//                          _libssh2_kex_session *session);
 
     long flags;
 };
