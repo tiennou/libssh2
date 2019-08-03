@@ -1983,7 +1983,7 @@ _libssh2_wincng_cipher_dtor(_libssh2_cipher_ctx *ctx)
  */
 
 _libssh2_bn *
-_libssh2_wincng_bignum_init(void)
+_libssh2_wincng_bignum_new(void)
 {
     _libssh2_bn *bignum;
 
@@ -2187,18 +2187,19 @@ _libssh2_wincng_bignum_bits(const _libssh2_bn *bn)
     return bits;
 }
 
-void
-_libssh2_wincng_bignum_from_bin(_libssh2_bn *bn, unsigned long len,
-                                const unsigned char *bin)
+_libssh2_bn *
+_libssh2_wincng_bignum_new_from_bin(unsigned long len,
+                                const void *bin)
 {
+    _libssh2_bn *bn = _libssh2_bn_new();
     unsigned char *bignum;
     unsigned long offset, length, bits;
 
     if(!bn || !bin || !len)
-        return;
+        return NULL;
 
     if(_libssh2_wincng_bignum_resize(bn, len))
-        return;
+        return NULL;
 
     memcpy(bn->bignum, bin, len);
 
@@ -2220,6 +2221,7 @@ _libssh2_wincng_bignum_from_bin(_libssh2_bn *bn, unsigned long len,
             bn->length = length;
         }
     }
+    return bn;
 }
 
 void
@@ -2252,10 +2254,7 @@ _libssh2_wincng_bignum_free(_libssh2_bn *bn)
 void
 _libssh2_dh_init(_libssh2_dh_ctx *dhctx)
 {
-    /* Random from client */
-    dhctx->bn = NULL;
-    dhctx->dh_handle = NULL;
-    dhctx->dh_params = NULL;
+    *dhctx = _libssh2_wincng_bignum_new();     /* Random from client */
 }
 
 void
