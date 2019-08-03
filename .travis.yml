@@ -80,3 +80,4 @@ script:
 branches:
     only:
         - master
+        - /ci\/.*/
