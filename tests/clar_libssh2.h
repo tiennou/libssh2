@@ -91,6 +91,7 @@
 #define ECDSA_KEYFILE_ENC_PUBLIC "publickeys/key_ecdsa_encrypted.pub"
 #define ECDSA_KEYFILE_ENC_PASSWORD "libssh2"
 
+#define SFTP_FILE_SONGOF7CITIES "sftp/songof7cities.txt"
 
 LIBSSH2_SESSION *cl_ssh2_open_session(void *abstract, int blocking);
 LIBSSH2_SESSION *cl_ssh2_open_session_openssh(void *abstract, int blocking);
