@@ -1136,7 +1136,7 @@ static int channel_request_auth_agent(LIBSSH2_CHANNEL *channel,
 LIBSSH2_API int
 libssh2_channel_request_auth_agent(LIBSSH2_CHANNEL *channel)
 {
-    int rc;
+    int rc = 0;
 
     if(!channel)
         return LIBSSH2_ERROR_BAD_USE;
