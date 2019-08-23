@@ -263,8 +263,9 @@ _libssh2_channel_open(LIBSSH2_SESSION * session, const char *channel_type,
             session->open_channel->local.packet_size =
                 _libssh2_ntohu32(session->open_data + 13);
             _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                           "Connection Established - ID: %lu/%lu win: %lu/%lu"
-                           " pack: %lu/%lu",
+                           "Connection Established - ID: %"PRIu32"/%"PRIu32""
+                           " win: %"PRIu32"/%"PRIu32
+                           " pack: %"PRIu32"/%"PRIu32,
                            session->open_channel->local.id,
                            session->open_channel->remote.id,
                            session->open_channel->local.window_size,
@@ -470,7 +471,7 @@ channel_forward_listen(LIBSSH2_SESSION * session, const char *host,
         host = "0.0.0.0";
 
     if(session->fwdLstn_state == libssh2_NB_state_idle) {
-        session->fwdLstn_host_len = strlen(host);
+        session->fwdLstn_host_len = (uint32_t)strlen(host);
         /* 14 = packet_type(1) + request_len(4) + want_replay(1) + host_len(4)
            + port(4) */
         session->fwdLstn_packet_len =
