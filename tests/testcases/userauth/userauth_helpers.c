@@ -48,7 +48,8 @@ void cl_userauth_authenticate(LIBSSH2_SESSION *session, const char *username,
 
     if(auth & USERAUTH_MECH_PASSWORD) {
         cl_ssh2_check(libssh2_userauth_password(session, username,
-                                                opts->password));
+                                                (opts->password ?
+                                                 opts->password : "")));
     }
     else if(auth & USERAUTH_MECH_KEYBOARD_INTERACTIVE) {
         /* Or via keyboard-interactive */
