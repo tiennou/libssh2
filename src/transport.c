@@ -384,7 +384,7 @@ int _libssh2_transport_read(LIBSSH2_SESSION * session)
                 return LIBSSH2_ERROR_SOCKET_RECV;
             }
             _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
-                           "Recved %d/%d bytes to %p+%d", nread,
+                           "Recved %zd/%d bytes to %p+%d", nread,
                            PACKETBUFSIZE - remainbuf, p->buf, remainbuf);
 
             debugdump(session, "libssh2_transport_read() raw",
@@ -649,10 +649,10 @@ send_existing(LIBSSH2_SESSION *session, const unsigned char *data,
                        LIBSSH2_SOCKET_SEND_FLAGS(session));
     if(rc < 0)
         _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
-                       "Error sending %d bytes: %d", length, -rc);
+                       "Error sending %d bytes: %zd", length, -rc);
     else {
         _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
-                       "Sent %d/%d bytes at %p+%d", rc, length, p->outbuf,
+                       "Sent %zd/%zd bytes at %p+%zu", rc, length, p->outbuf,
                        p->osent);
         debugdump(session, "libssh2_transport_write send()",
                   &p->outbuf[p->osent], rc);
@@ -891,7 +891,8 @@ int _libssh2_transport_send(LIBSSH2_SESSION *session,
         _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
                        "Error sending %d bytes: %d", total_length, -ret);
     else {
-        _libssh2_debug(session, LIBSSH2_TRACE_SOCKET, "Sent %d/%d bytes at %p",
+        _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
+                       "Sent %zd/%zd bytes at %p",
                        ret, total_length, p->outbuf);
         debugdump(session, "libssh2_transport_write send()", p->outbuf, ret);
     }

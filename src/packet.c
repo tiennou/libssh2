@@ -134,7 +134,8 @@ packet_queue_listener(LIBSSH2_SESSION * session, unsigned char *data,
         }
 
         _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                       "Remote received connection from %s:%ld to %s:%ld",
+                       "Remote received connection "
+                       "from %s:%"PRIu32" to %s:%"PRIu32,
                        listen_state->shost, listen_state->sport,
                        listen_state->host, listen_state->port);
 
@@ -207,8 +208,10 @@ packet_queue_listener(LIBSSH2_SESSION * session, unsigned char *data,
                     channel->local.packet_size = listen_state->packet_size;
 
                     _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                                   "Connection queued: channel %lu/%lu "
-                                   "win %lu/%lu packet %lu/%lu",
+                                   "Connection queued: "
+                                   "channel %"PRIu32"/%"PRIu32" "
+                                   "win %"PRIu32"/%"PRIu32" "
+                                   "packet %"PRIu32"/%"PRIu32,
                                    channel->local.id, channel->remote.id,
                                    channel->local.window_size,
                                    channel->remote.window_size,
@@ -347,7 +350,8 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
         }
 
         _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                       "X11 Connection Received from %s:%ld on channel %lu",
+                       "X11 Connection Received from %s:%"PRIu32" "
+                       "on channel %"PRIu32,
                        x11open_state->shost, x11open_state->sport,
                        x11open_state->sender_channel);
 
@@ -392,8 +396,10 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
             channel->local.packet_size = x11open_state->packet_size;
 
             _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                           "X11 Connection established: channel %lu/%lu "
-                           "win %lu/%lu packet %lu/%lu",
+                           "X11 Connection established: "
+                           "channel %"PRIu32"/%"PRIu32" "
+                           "win %"PRIu32"/%"PRIu32" "
+                           "packet %"PRIu32"/%"PRIu32,
                            channel->local.id, channel->remote.id,
                            channel->local.window_size,
                            channel->remote.window_size,
@@ -548,7 +554,7 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                 }
 
                 _libssh2_debug(session, LIBSSH2_TRACE_TRANS,
-                               "Disconnect(%d): %s(%s)", reason,
+                               "Disconnect(%"PRIu32"): %s(%s)", reason,
                                message, language);
             }
 
@@ -692,7 +698,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                     stream_id = _libssh2_ntohu32(data + 5);
 
                 _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                               "%d bytes packet_add() for %lu/%lu/%lu",
+                               "%d bytes packet_add() for "
+                               "%"PRIu32"/%"PRIu32"/%"PRIu32,
                                (int) (datalen - data_head),
                                channelp->local.id,
                                channelp->remote.id,
@@ -715,8 +722,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
 
                 channelp->remote.window_size -= datalen - data_head;
                 _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                               "shrinking window size by %lu bytes to %lu, "
-                               "read_avail %lu",
+                               "shrinking window size by %zu bytes to "
+                               "%"PRIu32", read_avail %"PRIu32,
                                datalen - data_head,
                                channelp->remote.window_size,
                                channelp->read_avail);
@@ -784,10 +791,11 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
             channelp->read_avail += datalen - data_head;
 
             _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                           "increasing read_avail by %lu bytes to %lu/%lu",
-                           (long)(datalen - data_head),
-                           (long)channelp->read_avail,
-                           (long)channelp->remote.window_size);
+                           "increasing read_avail by %zu bytes "
+                           "to %"PRIu32"/%"PRIu32,
+                           (datalen - data_head),
+                           channelp->read_avail,
+                           channelp->remote.window_size);
 
             break;
 
@@ -807,7 +815,7 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
             else {
                 _libssh2_debug(session,
                                LIBSSH2_TRACE_CONN,
-                               "EOF received for channel %lu/%lu",
+                               "EOF received for channel %"PRIu32"/%"PRIu32,
                                channelp->local.id,
                                channelp->remote.id);
                 channelp->remote.eof = 1;
@@ -833,9 +841,9 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                 if((len + 9) < datalen)
                     want_reply = data[len + 9];
 
-                _libssh2_debug(session,
-                               LIBSSH2_TRACE_CONN,
-                               "Channel %d received request type %.*s (wr %X)",
+                _libssh2_debug(session, LIBSSH2_TRACE_CONN,
+                               "Channel %"PRIu32" received request "
+                               "type %.*s (wr %X)",
                                channel, len, data + 9, want_reply);
 
                 if(len == sizeof("exit-status") - 1
@@ -852,8 +860,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                         channelp->exit_status =
                             _libssh2_ntohu32(data + 9 + sizeof("exit-status"));
                         _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                                       "Exit status %lu received for "
-                                       "channel %lu/%lu",
+                                       "Exit status %d received for "
+                                       "channel %"PRIu32"/%"PRIu32,
                                        channelp->exit_status,
                                        channelp->local.id,
                                        channelp->remote.id);
@@ -892,7 +900,7 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                             /* TODO: save error message and language tag */
                             _libssh2_debug(session, LIBSSH2_TRACE_CONN,
                                            "Exit signal %s received for "
-                                           "channel %lu/%lu",
+                                           "channel %"PRIu32"/%"PRIu32,
                                            channelp->exit_signal,
                                            channelp->local.id,
                                            channelp->remote.id);
@@ -933,7 +941,7 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                 return 0;
             }
             _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                           "Close received for channel %lu/%lu",
+                           "Close received for channel %"PRIu32"/%"PRIu32,
                            channelp->local.id,
                            channelp->remote.id);
 
@@ -1008,8 +1016,9 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                     channelp->local.window_size += bytestoadd;
 
                     _libssh2_debug(session, LIBSSH2_TRACE_CONN,
-                                   "Window adjust for channel %lu/%lu, "
-                                   "adding %lu bytes, new window_size=%lu",
+                                   "Window adjust for channel "
+                                   "%"PRIu32"/%"PRIu32", adding %"PRIu32" "
+                                   "bytes, new window_size=%"PRIu32,
                                    channelp->local.id,
                                    channelp->remote.id,
                                    bytestoadd,

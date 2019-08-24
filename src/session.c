@@ -238,11 +238,11 @@ banner_send(LIBSSH2_SESSION * session)
                         LIBSSH2_SOCKET_SEND_FLAGS(session));
     if(ret < 0)
         _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
-                       "Error sending %d bytes: %d",
+                       "Error sending %d bytes: %zd",
                        banner_len - session->banner_TxRx_total_send, -ret);
     else
         _libssh2_debug(session, LIBSSH2_TRACE_SOCKET,
-                       "Sent %d/%d bytes at %p+%d", ret,
+                       "Sent %zd/%d bytes at %p+%zd", ret,
                        banner_len - session->banner_TxRx_total_send,
                        banner, session->banner_TxRx_total_send);
 

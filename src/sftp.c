@@ -161,7 +161,7 @@ remove_zombie_request(LIBSSH2_SFTP *sftp, uint32_t request_id)
                                                               request_id);
     if(zombie) {
         _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                       "Removing request ID %ld from the list of "
+                       "Removing request ID %"PRIu32" from the list of "
                        "zombie requests",
                        request_id);
 
@@ -178,7 +178,8 @@ add_zombie_request(LIBSSH2_SFTP *sftp, uint32_t request_id)
     struct sftp_zombie_requests *zombie;
 
     _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                   "Marking request ID %ld as a zombie request", request_id);
+                   "Marking request ID %"PRIu32" as a zombie request",
+                   request_id);
 
     zombie = LIBSSH2_ALLOC(sftp->channel->session,
                            sizeof(struct sftp_zombie_requests));
@@ -210,7 +211,7 @@ sftp_packet_add(LIBSSH2_SFTP *sftp, unsigned char *data,
     }
 
     _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                   "Received packet type %d (len %d)",
+                   "Received packet type %d (len %zu)",
                    (int) data[0], data_len);
 
     /*
@@ -256,7 +257,7 @@ sftp_packet_add(LIBSSH2_SFTP *sftp, unsigned char *data,
 
     request_id = _libssh2_ntohu32(&data[1]);
 
-    _libssh2_debug(session, LIBSSH2_TRACE_SFTP, "Received packet id %d",
+    _libssh2_debug(session, LIBSSH2_TRACE_SFTP, "Received packet id %"PRIu32,
                    request_id);
 
     /* Don't add the packet if it answers a request we've given up on. */
@@ -317,9 +318,9 @@ sftp_packet_read(LIBSSH2_SFTP *sftp)
         packet = sftp->partial_packet;
 
         _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                       "partial read cont, len: %lu", sftp->partial_len);
+                       "partial read cont, len: %"PRIu32, sftp->partial_len);
         _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                       "partial read cont, already recvd: %lu",
+                       "partial read cont, already recvd: %zu",
                        sftp->partial_received);
         /* fall-through */
     default:
@@ -360,7 +361,7 @@ sftp_packet_read(LIBSSH2_SFTP *sftp)
                                       "Unable to allocate empty SFTP packet");
 
             _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                           "Data begin - Packet Length: %lu",
+                           "Data begin - Packet Length: %"PRIu32,
                            sftp->partial_len);
             packet = LIBSSH2_ALLOC(session, sftp->partial_len);
             if(!packet)
@@ -527,7 +528,8 @@ sftp_packet_require(LIBSSH2_SFTP *sftp, unsigned char packet_type,
         return LIBSSH2_ERROR_BAD_USE;
     }
 
-    _libssh2_debug(session, LIBSSH2_TRACE_SFTP, "Requiring packet %d id %ld",
+    _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
+                   "Requiring packet %d id %"PRIu32,
                    (int) packet_type, request_id);
 
     if(sftp_packet_ask(sftp, packet_type, request_id, data, data_len) == 0) {
@@ -930,12 +932,12 @@ static LIBSSH2_SFTP *sftp_init(LIBSSH2_SESSION *session)
 
     if(sftp_handle->version > LIBSSH2_SFTP_VERSION) {
         _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                       "Truncating remote SFTP version from %lu",
+                       "Truncating remote SFTP version from %"PRIu32,
                        sftp_handle->version);
         sftp_handle->version = LIBSSH2_SFTP_VERSION;
     }
     _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                   "Enabling SFTP version %lu compatibility",
+                   "Enabling SFTP version %"PRIu32" compatibility",
                    sftp_handle->version);
     while(buf.dataptr < endp) {
         unsigned char *extname, *extdata;
@@ -1858,7 +1860,7 @@ static ssize_t sftp_readdir(LIBSSH2_SFTP_HANDLE *handle, char *buffer,
                 LIBSSH2_FREE(session, handle->u.dir.names_packet);
 
             _libssh2_debug(session, LIBSSH2_TRACE_SFTP,
-                           "libssh2_sftp_readdir_ex() return %d",
+                           "libssh2_sftp_readdir_ex() return %zu",
                            filename_len);
             return (ssize_t)filename_len;
         }
@@ -1938,7 +1940,7 @@ static ssize_t sftp_readdir(LIBSSH2_SFTP_HANDLE *handle, char *buffer,
     sftp->readdir_state = libssh2_NB_state_idle;
 
     num_names = _libssh2_ntohu32(data + 5);
-    _libssh2_debug(session, LIBSSH2_TRACE_SFTP, "%lu entries returned",
+    _libssh2_debug(session, LIBSSH2_TRACE_SFTP, "%"PRIu32" entries returned",
                    num_names);
     if(!num_names) {
         LIBSSH2_FREE(session, data);
