@@ -103,6 +103,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(22);
     sin.sin_addr.s_addr = hostaddr;

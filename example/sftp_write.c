@@ -101,6 +101,7 @@ int main(int argc, char *argv[])
      */
     sock = socket(AF_INET, SOCK_STREAM, 0);
 
+    memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(22);
     sin.sin_addr.s_addr = hostaddr;

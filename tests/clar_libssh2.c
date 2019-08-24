@@ -241,6 +241,7 @@ static int open_socket_to_container(char *container_id)
         goto cleanup;
     }
 
+    memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons((short)strtol(port_string, NULL, 0));
     sin.sin_addr.s_addr = hostaddr;

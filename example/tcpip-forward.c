@@ -114,6 +114,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = inet_addr(server_ip);
     if(INADDR_NONE == sin.sin_addr.s_addr) {
