@@ -456,6 +456,14 @@ static int waitsocket(int socket_fd, LIBSSH2_SESSION *session)
         writefd = &fd;
 
     rc = select(socket_fd + 1, readfd, writefd, NULL, &timeout);
+    if(rc < 0) {
+        fprintf(stderr, "select() failed: %d\n", rc);
+        return -1;
+    }
+    else if(rc == 0) {
+        fprintf(stderr, "select() timed out\n");
+        return -1;
+    }
 
     return rc;
 }

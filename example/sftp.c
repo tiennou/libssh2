@@ -144,6 +144,10 @@ int main(int argc, char *argv[])
      * and establishing the connection
      */
     sock = socket(AF_INET, SOCK_STREAM, 0);
+    if(sock < 0) {
+        fprintf(stderr, "failed to open socket!\n");
+        return -1;
+    }
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
