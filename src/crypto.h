@@ -68,5 +68,9 @@ int _libssh2_sha512(const void *message, size_t len, void *out);
 
 void _libssh2_crypto_trace(LIBSSH2_SESSION *session,
                            const char *backend_id, const char *fmt, ...);
+int _libssh2_crypto_error(LIBSSH2_SESSION *session,
+                          libssh2_crypto_errcode error,
+                          const char *backend_id, const char *fmt, ...);
+
 
 #endif

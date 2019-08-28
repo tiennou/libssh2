@@ -75,6 +75,9 @@ void libssh2_crypto_exit(void);
 /* returns 0 in case of failure */
 int _libssh2_random(void *buf, size_t len);
 
+int _libssh2_crypto_errormsg(libssh2_crypto_errcode error,
+                             char *msg, size_t msglen);
+
 /* Digests */
 
 int libssh2_sha1_init(libssh2_sha1_ctx *ctx);

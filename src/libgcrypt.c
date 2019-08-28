@@ -52,6 +52,18 @@ void libssh2_crypto_exit(void)
 
 }
 
+int _libssh2_crypto_errormsg(libssh2_crypto_errcode error,
+                             char *msg, size_t msglen)
+{
+    if(error == 0) {
+        *msg = '\0';
+        return 0;
+    }
+
+    strncpy(msg, gcry_strerror(error), msglen);
+    return 0;
+}
+
 int _libssh2_random(void *buf, size_t len)
 {
     gcry_randomize((buf), (len), GCRY_STRONG_RANDOM);

@@ -67,6 +67,8 @@
 #define LIBSSH2_ECDSA           0
 #define LIBSSH2_ED25519         0
 
+#define libssh2_crypto_errcode int
+
 /*******************************************************************/
 /*
  * mbedTLS backend: Digest

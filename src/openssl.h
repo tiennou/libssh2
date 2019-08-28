@@ -140,6 +140,8 @@
 # define LIBSSH2_3DES 1
 #endif
 
+#define libssh2_crypto_errcode unsigned long
+
 #define libssh2_sha1_ctx OPAQUE_DEF(EVP_MD_CTX)
 #define libssh2_sha256_ctx OPAQUE_DEF(EVP_MD_CTX)
 #define libssh2_sha384_ctx OPAQUE_DEF(EVP_MD_CTX)

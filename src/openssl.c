@@ -42,11 +42,27 @@
 
 #ifdef LIBSSH2_OPENSSL /* compile only if we build with openssl */
 
+#include <openssl/err.h>
 #include <string.h>
 #include "misc.h"
 
 #define openssl_trace(s, fmt, ...) \
     _libssh2_crypto_trace(s, "openssl", fmt, #__VA_ARGS__)
+
+#define openssl_error(s, fmt, ...) \
+    _libssh2_crypto_error(s, ERR_get_error(), "openssl", fmt, #__VA_ARGS__)
+
+int _libssh2_crypto_errormsg(libssh2_crypto_errcode error,
+                             char *msg, size_t msglen)
+{
+    if(error == 0) {
+        *msg = '\0';
+        return 0;
+    }
+
+    ERR_error_string_n(error, msg, msglen);
+    return 0;
+}
 
 #ifndef EVP_MAX_BLOCK_LENGTH
 #define EVP_MAX_BLOCK_LENGTH 32
@@ -2612,11 +2628,13 @@ _libssh2_ed25519_sign(libssh2_ed25519_ctx *ctx, LIBSSH2_SESSION *session,
 
     ret = EVP_DigestSignInit(md_ctx, NULL, NULL, NULL, ctx->private_key);
     if(ret != 1) {
+        error = openssl_error(session, "failed to siginit");
         goto clean_exit;
     }
 
     ret = EVP_DigestSign(md_ctx, NULL, &sig_len, message, message_len);
     if(ret != 1) {
+        error = openssl_error(session, "failed to sign");
         goto clean_exit;
     }
 

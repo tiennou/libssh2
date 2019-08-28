@@ -82,6 +82,19 @@ _libssh2_random(void *buf, size_t len)
     return ret == 0 ? 0 : -1;
 }
 
+
+int _libssh2_crypto_errormsg(libssh2_crypto_errcode error,
+                             char *msg, size_t msglen)
+{
+    if(error == 0) {
+        *msg = '\0';
+        return 0;
+    }
+
+    mbedtls_strerror(error, msg, msglen);
+    return 0;
+}
+
 static void
 safe_free(void *buf, int len)
 {
