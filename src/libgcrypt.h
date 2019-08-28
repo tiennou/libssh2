@@ -59,11 +59,7 @@
 
 #define libssh2_crypto_errcode gcry_error_t
 
-#define libssh2_sha1_ctx gcry_md_hd_t
-#define libssh2_sha256_ctx gcry_md_hd_t
-#define libssh2_sha384_ctx gcry_md_hd_t
-#define libssh2_sha512_ctx gcry_md_hd_t
-#define libssh2_md5_ctx gcry_md_hd_t
+#define libssh2_digest_ctx gcry_md_hd_t
 #define libssh2_hmac_ctx gcry_md_hd_t
 
 #define libssh2_rsa_ctx struct gcry_sexp

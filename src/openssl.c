@@ -241,7 +241,7 @@ _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsactx,
     unsigned char hash[SHA_DIGEST_LENGTH];
     int ret;
 
-    if(_libssh2_sha1(m, m_len, hash) != 0)
+    if(libssh2_sha1(m, m_len, hash) != 0)
         return -1; /* failure */
 
     ret = RSA_verify(NID_sha1, hash, SHA_DIGEST_LENGTH,
@@ -337,7 +337,7 @@ _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsactx,
     dsasig->r = r;
     dsasig->s = s;
 #endif
-    if(_libssh2_sha1(m, m_len, hash) != 0) {
+    if(libssh2_sha1(m, m_len, hash) != 0) {
         ret = -1;
         goto cleanup;
     }
@@ -402,11 +402,10 @@ _libssh2_ecdsa_curve_name_with_octal_new(libssh2_ecdsa_ctx ** ec_ctx,
 #define LIBSSH2_ECDSA_VERIFY(digest_type)                           \
 {                                                                   \
     unsigned char hash[SHA##digest_type##_DIGEST_LENGTH];           \
-    if(_libssh2_sha##digest_type(m, m_len, hash) != 0)              \
-        ret = -1;                                                   \
-    else                                                            \
-        ret = ECDSA_do_verify(hash,                                 \
-            SHA##digest_type##_DIGEST_LENGTH, ecdsa_sig, ec_key);   \
+    libssh2_hash(libssh2_digest_SHA##digest_type, m, m_len, hash);  \
+    ret = ECDSA_do_verify(hash, SHA##digest_type##_DIGEST_LENGTH,   \
+      ecdsa_sig, ec_key);                                           \
+                                                                    \
 }
 
 int
@@ -2046,121 +2045,138 @@ clean_exit:
 }
 #endif /* LIBSSH2_ECDSA */
 
-static int _digest_init(void **out_ctx, const char *name)
+int libssh2_digest_init(libssh2_digest_ctx *out_ctx,
+                        libssh2_digest_algorithm algo)
 {
-    EVP_MD_CTX *ctx;
+    int res = 0;
+    libssh2_digest_ctx ctx;
+
+    const EVP_MD *type = NULL;
+    switch(algo) {
+        case libssh2_digest_MD5: type = EVP_md5(); break;
+        case libssh2_digest_SHA1: type = EVP_sha1(); break;
+        case libssh2_digest_SHA256: type = EVP_sha256(); break;
+        case libssh2_digest_SHA384: type = EVP_sha384(); break;
+        case libssh2_digest_SHA512: type = EVP_sha512(); break;
+        case libssh2_digest_RIPEMD160: type = EVP_ripemd160(); break;
+
+        default:
+            res = -1;
+            goto cleanup;
+    }
+
 #ifdef HAVE_OPAQUE_STRUCTS
-    ctx = EVP_MD_CTX_new();
-    if(ctx == NULL)
-        return -1;
+    ctx = EVP_MD_CTX_create();
+    if(ctx == NULL) {
+        res = -1;
+        goto cleanup;
+    }
+#else
+    EVP_MD_CTX_init(&ctx->md_ctx);
 #endif
 
-    if(EVP_DigestInit(ctx, EVP_get_digestbyname(name)) != 1) {
-#ifdef HAVE_OPAQUE_STRUCTS
-        EVP_MD_CTX_free(ctx);
-#endif
-        return -1;
+    if(EVP_DigestInit(ctx, type) == 0) {
+        res = -1;
+        goto cleanup;
     }
 
     *out_ctx = ctx;
 
     return 0;
+
+cleanup:
+    out_ctx = NULL;
+
+    return res;
 }
 
-static void _digest_free(void **p_ctx)
+int libssh2_digest_update(libssh2_digest_ctx ctx,
+                          const void *data, size_t datalen)
 {
-    EVP_MD_CTX *ctx = *(EVP_MD_CTX **)p_ctx;
+    int res = EVP_DigestUpdate(ctx, data, datalen);
+    if(res == 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int libssh2_digest_final(libssh2_digest_ctx ctx, void *output)
+{
+    unsigned int hashlen = 0;
+    int res = EVP_DigestFinal_ex(ctx, output, &hashlen);
+    if(res == 0) {
+        return -1;
+    }
+
 #ifdef HAVE_OPAQUE_STRUCTS
-    EVP_MD_CTX_free(ctx);
+    EVP_MD_CTX_destroy(ctx);
 #else
-    EVP_MD_CTX_destroy(OPAQUE_PTR(ctx));
+    EVP_MD_CTX_cleanup(&ctx);
 #endif
+
+    return 0;
 }
 
-#define HASH_INIT(hash) \
-int libssh2_##hash##_init(libssh2_##hash##_ctx *ctx) \
-{ \
-    return _digest_init((void **)ctx, #hash); \
-}
-
-#define HASH_UPDATE(hash) \
-int libssh2_##hash##_update(libssh2_##hash##_ctx ctx, \
-    const void *data, size_t len) \
-{ \
-    return (EVP_DigestUpdate(ctx, data, len) == 1) ? 0 : -1; \
-} \
-
-#define HASH_FINALIZE(hash) \
-int libssh2_##hash##_final(libssh2_##hash##_ctx ctx, void *out) \
-{ \
-    int res = (EVP_DigestFinal(OPAQUE_ADDR(ctx), out, NULL) == 1) ? 0 : -1; \
-    _digest_free((void **)&ctx); \
-    return res; \
-}
-
-#define HASH_FUNCTIONS(hash) \
-HASH_INIT(hash) \
-HASH_UPDATE(hash) \
-HASH_FINALIZE(hash);
-
-HASH_FUNCTIONS(sha1)
-HASH_FUNCTIONS(sha256)
-HASH_FUNCTIONS(sha384)
-HASH_FUNCTIONS(sha512)
-HASH_FUNCTIONS(md5)
-
-static int _hmac_init(libssh2_hmac_ctx *out_ctx, const char *name,
-                      const void *key, size_t keylen)
+int libssh2_hmac_init(libssh2_hmac_ctx *out_ctx,
+                      libssh2_digest_algorithm algo,
+                      const void *key,
+                      size_t keylen)
 {
-    HMAC_CTX *ctx;
+    int ret = 0;
+    libssh2_hmac_ctx ctx;
+
+    const EVP_MD *type = NULL;
+    switch(algo) {
+        case libssh2_digest_MD5: type = EVP_md5(); break;
+        case libssh2_digest_SHA1: type = EVP_sha1(); break;
+        case libssh2_digest_SHA256: type = EVP_sha256(); break;
+        case libssh2_digest_SHA384: type = EVP_sha384(); break;
+        case libssh2_digest_SHA512: type = EVP_sha512(); break;
+        case libssh2_digest_RIPEMD160: type = EVP_ripemd160(); break;
+
+        default:
+            ret = -1;
+            goto cleanup;
+    }
+
 #ifdef HAVE_OPAQUE_STRUCTS
     ctx = HMAC_CTX_new();
-    if(ctx == NULL)
-        return -1;
+#else
+    HMAC_CTX_init(&ctx);
 #endif
-
-    if(HMAC_Init_ex(ctx, key, keylen, EVP_get_digestbyname(name), NULL) != 1) {
-#ifdef HAVE_OPAQUE_STRUCTS
-        HMAC_CTX_free(ctx);
-#endif
-       return -1;
+    if(HMAC_Init_ex(ctx, key, keylen, type, NULL) != 1) {
+        ret = -1;
+        goto cleanup;
     }
-
     *out_ctx = ctx;
+
     return 0;
+
+cleanup:
+    out_ctx = NULL;
+
+    return ret;
 }
 
-#define HMAC_INIT(hash) \
-int libssh2_hmac_##hash##_init(libssh2_hmac_ctx *ctx,           \
-                               const void *key, size_t keylen)  \
-{                                                               \
-    return _hmac_init(ctx, #hash, key, keylen);                 \
-}
-
-HMAC_INIT(sha1)
-HMAC_INIT(sha256)
-HMAC_INIT(sha384)
-HMAC_INIT(sha512)
-HMAC_INIT(ripemd160)
-HMAC_INIT(md5)
-
-int libssh2_hmac_update(libssh2_hmac_ctx ctx, const void *data, size_t datalen)
+int libssh2_hmac_update(libssh2_hmac_ctx ctx,
+                        const void *data, size_t datalen)
 {
     return (HMAC_Update(ctx, data, datalen) == 1 ? 0 : -1);
 }
 
-int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *data)
+int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *output)
 {
-    return (HMAC_Final(ctx, data, NULL) == 1 ? 0 : -1);
+    return (HMAC_Final(ctx, output, NULL) == 1 ? 0 : -1);
 }
 
-int libssh2_hmac_cleanup(libssh2_hmac_ctx *ctx)
+int libssh2_hmac_cleanup(libssh2_hmac_ctx ctx)
 {
 #ifdef HAVE_OPAQUE_STRUCTS
-    HMAC_CTX_free(*ctx);
+    HMAC_CTX_free(ctx);
 #else
-    HMAC_cleanup(*ctx);
+    HMAC_CTX_cleanup(&ctx);
 #endif
+
     return 0;
 }
 

@@ -110,7 +110,7 @@ bcrypt_pbkdf(const char *pass, size_t passlen, const uint8_t *salt,
     size_t i, j, amt, stride;
     uint32_t count;
     size_t origkeylen = keylen;
-    libssh2_sha512_ctx ctx;
+    libssh2_digest_ctx ctx;
 
     /* nothing crazy */
     if(rounds < 1)

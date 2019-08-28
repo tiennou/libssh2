@@ -60,11 +60,17 @@
 
 #include "backend.h"
 
-/* Quick hashing */
-int _libssh2_sha1(const void *message, size_t len, void *out);
-int _libssh2_sha256(const void *message, size_t len, void *out);
-int _libssh2_sha384(const void *message, size_t len, void *out);
-int _libssh2_sha512(const void *message, size_t len, void *out);
+/*
+ * Hash a message.
+ *
+ * This function hashes the given message with the given algorithm and
+ * returns the result in out.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_hash(libssh2_digest_algorithm algo,
+                 const void *message, size_t len,
+                 void *output);
 
 void _libssh2_crypto_trace(LIBSSH2_SESSION *session,
                            const char *backend_id, const char *fmt, ...);

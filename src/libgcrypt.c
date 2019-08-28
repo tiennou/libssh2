@@ -70,71 +70,101 @@ int _libssh2_random(void *buf, size_t len)
     return 0;
 }
 
-#define GCRYPT_CIPHER(code, digest, length)                     \
-int libssh2_##code##_init(libssh2_##code##_ctx *ctx)            \
-{                                                               \
-    if(gcry_md_open(ctx,  digest, 0) != 0)                      \
-        return -1;                                              \
-    return 0;                                                   \
-}                                                               \
-int libssh2_##code##_update(libssh2_##code##_ctx ctx,           \
-    const void *data, size_t len)                               \
-{                                                               \
-    gcry_md_write(ctx, (unsigned char *) data, len);            \
-    return 0;                                                   \
-}                                                               \
-int libssh2_##code##_final(libssh2_##code##_ctx ctx, void *out) \
-{                                                               \
-    unsigned char *ptr = gcry_md_read(ctx, 0);                  \
-    if(ptr == NULL)                                             \
-        return -1;                                              \
-    memcpy(out, ptr, length);                                   \
-    gcry_md_close(ctx);                                         \
-    return 0;                                                   \
-}
-
-GCRYPT_CIPHER(sha1, GCRY_MD_SHA1, SHA_DIGEST_LENGTH);
-GCRYPT_CIPHER(sha256, GCRY_MD_SHA256, SHA256_DIGEST_LENGTH);
-GCRYPT_CIPHER(sha384, GCRY_MD_SHA384, SHA384_DIGEST_LENGTH);
-GCRYPT_CIPHER(sha512, GCRY_MD_SHA512, SHA512_DIGEST_LENGTH);
-GCRYPT_CIPHER(md5, GCRY_MD_MD5, MD5_DIGEST_LENGTH);
-
-#define GCRYPT_HMAC_CIPHER(code, digest)                        \
-int libssh2_hmac_##code##_init(libssh2_hmac_ctx *ctx,           \
-    const void *key, size_t keylen)                             \
-{                                                               \
-    if(gcry_md_open(ctx, digest, GCRY_MD_FLAG_HMAC) != 0 ||     \
-       gcry_md_setkey(*ctx, key, keylen) != 0)                  \
-        return -1;                                              \
-    return 0;                                                   \
-}
-
-GCRYPT_HMAC_CIPHER(sha1, GCRY_MD_SHA1);
-GCRYPT_HMAC_CIPHER(sha256, GCRY_MD_SHA256);
-GCRYPT_HMAC_CIPHER(sha512, GCRY_MD_SHA512);
-GCRYPT_HMAC_CIPHER(md5, GCRY_MD_MD5);
-GCRYPT_HMAC_CIPHER(ripemd160, GCRY_MD_RMD160);
-
-int libssh2_hmac_update(libssh2_hmac_ctx ctx, const void *data, size_t datalen)
+int libssh2_digest_init(libssh2_digest_ctx *out_ctx,
+                        libssh2_digest_algorithm algo)
 {
-    gcry_md_write(ctx, (unsigned char *) data, datalen);
-    return 0;
-}
+    libssh2_digest_ctx ctx;
+    int g_algo = 0;
 
-int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *data)
-{
-    unsigned char *ptr = gcry_md_read(ctx, 0);
-    if(ptr == NULL)
+    if(!out_ctx)
         return -1;
 
-    memcpy(data, ptr, gcry_md_get_algo_dlen(gcry_md_get_algo(ctx)));
+    switch(algo) {
+        case libssh2_digest_MD5: g_algo = GCRY_MD_MD5; break;
+        case libssh2_digest_SHA1: g_algo = GCRY_MD_SHA1; break;
+        case libssh2_digest_SHA256: g_algo = GCRY_MD_SHA256; break;
+        case libssh2_digest_SHA384: g_algo = GCRY_MD_SHA384; break;
+        case libssh2_digest_SHA512: g_algo = GCRY_MD_SHA512; break;
+        case libssh2_digest_RIPEMD160: g_algo = GCRY_MD_RMD160; break;
+        default:
+            return -1;
+    }
+
+    if(gcry_md_open(&ctx, g_algo, 0) != 0) {
+        return -1;
+    }
+    *out_ctx = ctx;
 
     return 0;
 }
 
-int libssh2_hmac_cleanup(libssh2_hmac_ctx *ctx)
+int libssh2_digest_update(libssh2_digest_ctx ctx,
+                          const void *data, size_t datalen)
+{
+    gcry_md_write(ctx, data, datalen);
+    return 0;
+}
+
+int libssh2_digest_final(libssh2_digest_ctx ctx, void *output)
+{
+    unsigned int len = gcry_md_get_algo_dlen(gcry_md_get_algo(ctx));
+
+    memcpy(output, gcry_md_read(ctx, 0), len);
+
+    return 0;
+}
+
+int libssh2_digest_cleanup(libssh2_digest_ctx *ctx)
 {
     gcry_md_close(*ctx);
+    gcry_free(*ctx);
+
+    return 0;
+}
+
+int libssh2_hmac_init(libssh2_hmac_ctx *out_ctx, libssh2_digest_algorithm algo,
+                      const void *key, size_t keylen)
+{
+    libssh2_digest_ctx ctx;
+
+    int g_algo = 0;
+    switch(algo) {
+        case libssh2_digest_MD5: g_algo = GCRY_MD_MD5; break;
+        case libssh2_digest_SHA1: g_algo = GCRY_MD_SHA1; break;
+        case libssh2_digest_SHA256: g_algo = GCRY_MD_SHA256; break;
+        case libssh2_digest_SHA384: g_algo = GCRY_MD_SHA384; break;
+        case libssh2_digest_SHA512: g_algo = GCRY_MD_SHA512; break;
+        case libssh2_digest_RIPEMD160: g_algo = GCRY_MD_RMD160; break;
+        default:
+            return -1;
+    }
+
+    if(gcry_md_open(&ctx, g_algo, GCRY_MD_FLAG_HMAC) != 0
+        || gcry_md_setkey(ctx, key, keylen) != 0) {
+        return -1;
+    }
+    *out_ctx = ctx;
+
+    return 0;
+}
+
+int libssh2_hmac_update(libssh2_hmac_ctx ctx,
+                        const void *data, size_t datalen)
+{
+    gcry_md_write(ctx, (unsigned char *)data, datalen);
+    return 0;
+}
+
+int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *output)
+{
+    unsigned int len = gcry_md_get_algo_dlen(gcry_md_get_algo(ctx));
+    memcpy(output, gcry_md_read(ctx, 0), len);
+    return 0;
+}
+
+int libssh2_hmac_cleanup(libssh2_hmac_ctx ctx)
+{
+    gcry_md_close(ctx);
     return 0;
 }
 
@@ -253,7 +283,7 @@ _libssh2_rsa_sha1_verify(libssh2_rsa_ctx * rsa,
     gcry_sexp_t s_sig, s_hash;
     int rc = -1;
 
-    _libssh2_sha1(m, m_len, hash);
+    libssh2_sha1(m, m_len, hash);
 
     rc = gcry_sexp_build(&s_hash, NULL,
                          "(data (flags pkcs1) (hash sha1 %b))",
@@ -687,7 +717,7 @@ _libssh2_dsa_sha1_verify(libssh2_dsa_ctx * dsactx,
     gcry_sexp_t s_sig, s_hash;
     int rc = -1;
 
-    _libssh2_sha1(m, m_len, hash + 1);
+    libssh2_sha1(m, m_len, hash + 1);
     hash[0] = 0;
 
     if(gcry_sexp_build(&s_hash, NULL, "(data(flags raw)(value %b))",

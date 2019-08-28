@@ -80,44 +80,88 @@ int _libssh2_crypto_errormsg(libssh2_crypto_errcode error,
 
 /* Digests */
 
-int libssh2_sha1_init(libssh2_sha1_ctx *ctx);
-int libssh2_sha1_update(libssh2_sha1_ctx ctx, const void *data, size_t len);
-int libssh2_sha1_final(libssh2_sha1_ctx ctx, void *out);
+typedef enum {
+    libssh2_digest_MD5 = 1,
+    libssh2_digest_SHA1,
+    libssh2_digest_SHA256,
+    libssh2_digest_SHA384,
+    libssh2_digest_SHA512,
+    libssh2_digest_RIPEMD160,
+} libssh2_digest_algorithm;
 
-int libssh2_sha256_init(libssh2_sha256_ctx *ctx);
-int libssh2_sha256_update(libssh2_sha256_ctx ctx,
-                          const void *data, size_t len);
-int libssh2_sha256_final(libssh2_sha256_ctx ctx, void *out);
+/*
+ * Initialise a hashing context.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_digest_init(libssh2_digest_ctx *ctx,
+                        libssh2_digest_algorithm algo);
 
-int libssh2_sha384_init(libssh2_sha384_ctx *ctx);
-int libssh2_sha384_update(libssh2_sha384_ctx ctx,
-                          const void *data, size_t len);
-int libssh2_sha384_final(libssh2_sha384_ctx ctx, void *out);
+/*
+ * Update a hash
+ *
+ * Updates the hash with the given data.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_digest_update(libssh2_digest_ctx ctx,
+                          const void *data, size_t datalen);
 
-int libssh2_sha512_init(libssh2_sha512_ctx *ctx);
-int libssh2_sha512_update(libssh2_sha512_ctx ctx,
-                          const void *data, size_t len);
-int libssh2_sha512_final(libssh2_sha512_ctx ctx, void *out);
+/*
+ * Finalize a hash.
+ *
+ * Returns the final result of the hashing.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_digest_final(libssh2_digest_ctx ctx, void *output);
 
-int libssh2_md5_init(libssh2_md5_ctx *ctx);
-int libssh2_md5_update(libssh2_md5_ctx ctx, const void *data, size_t len);
-int libssh2_md5_final(libssh2_md5_ctx ctx, void *out);
+/*
+ * Return the hash size for a given algorithm.
+ *
+ * Returns the hash length on success, -1 on error.
+ */
+int libssh2_digest_size(libssh2_digest_algorithm algo);
 
-#define libssh2_hmac_ctx_init(...) /* deprecated */
-int libssh2_hmac_sha1_init(libssh2_hmac_ctx *ctx,
-                           const void *key, size_t keylen);
-int libssh2_hmac_md5_init(libssh2_hmac_ctx *ctx,
-                          const void *key, size_t keylen);
-int libssh2_hmac_ripemd160_init(libssh2_hmac_ctx *ctx,
-                                const void *key, size_t keylen);
-int libssh2_hmac_sha256_init(libssh2_hmac_ctx *ctx,
-                             const void *key, size_t keylen);
-int libssh2_hmac_sha512_init(libssh2_hmac_ctx *ctx,
-                             const void *key, size_t keylen);
+
+/* HMAC */
+
+/*
+ * Initialize a HMAC context.
+ *
+ * Setup the HMAC for hashing with the given hash algorithm and key.
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_hmac_init(libssh2_hmac_ctx *ctx,
+                      libssh2_digest_algorithm algo,
+                      const void *key,
+                      size_t keylen);
+
+/*
+ * Update a HMAC
+ *
+ * Continue computation of an HMAC on datalen bytes at data using context ctx.
+ * Returns 0 on success, -1 on error.
+ */
 int libssh2_hmac_update(libssh2_hmac_ctx ctx,
                         const void *data, size_t datalen);
-int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *data);
-int libssh2_hmac_cleanup(libssh2_hmac_ctx *ctx);
+
+/*
+ * Finalize a HMAC
+ *
+ * Get the computed HMAC from context ctx into the output buffer.
+ * The minimum data buffer size depends on the HMAC hash algorithm.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *output);
+
+/*
+ * Releases the HMAC computation context at ctx.
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int libssh2_hmac_cleanup(libssh2_hmac_ctx ctx);
 
 /* Cipher */
 int
@@ -330,5 +374,43 @@ int _libssh2_pub_priv_keyfilememory(LIBSSH2_SESSION *session,
                                     const char *privatekeydata,
                                     size_t privatekeydata_len,
                                     const char *passphrase);
+
+/** Compatibility layer */
+
+#define libssh2_sha1_init(c) libssh2_digest_init(c, libssh2_digest_SHA1)
+#define libssh2_sha1_update(c, d, l) libssh2_digest_update(c, d, l)
+#define libssh2_sha1_final(c, o) libssh2_digest_final(c, o)
+#define libssh2_sha1(m, l, o) libssh2_hash(libssh2_digest_SHA1, m, l, o)
+
+#define libssh2_sha256_init(c) libssh2_digest_init(c, libssh2_digest_SHA256)
+#define libssh2_sha256_update(c, d, l) libssh2_digest_update(c, d, l)
+#define libssh2_sha256_final(c, o) libssh2_digest_final(c, o)
+#define libssh2_sha256(m, l, o) libssh2_hash(libssh2_digest_SHA256, m, l, o)
+
+#define libssh2_sha384_init(c) libssh2_digest_init(c, libssh2_digest_SHA384)
+#define libssh2_sha384_update(c, d, l) libssh2_digest_update(c, d, l)
+#define libssh2_sha384_final(c, o) libssh2_digest_final(c, o)
+#define libssh2_sha384(m,l,o) libssh2_hash(libssh2_digest_SHA384, m, l, o)
+
+#define libssh2_sha512_init(c) libssh2_digest_init(c, libssh2_digest_SHA512)
+#define libssh2_sha512_update(c, d, l) libssh2_digest_update(c, d, l)
+#define libssh2_sha512_final(c, o) libssh2_digest_final(c, o)
+#define libssh2_sha512(m,l,o) libssh2_hash(libssh2_digest_SHA512, m, l, o)
+
+#define libssh2_md5_init(c) libssh2_digest_init(c, libssh2_digest_MD5)
+#define libssh2_md5_update(c, d, l) libssh2_digest_update(c, d, l)
+#define libssh2_md5_final(c, o) libssh2_digest_final(c, o)
+
+#define libssh2_hmac_ctx_init(ctx) /* Nothing */
+#define libssh2_hmac_md5_init(ctx, data, len) \
+    libssh2_hmac_init(ctx, libssh2_digest_MD5, data, len)
+#define libssh2_hmac_sha1_init(ctx, data, len) \
+    libssh2_hmac_init(ctx, libssh2_digest_SHA1, data, len)
+#define libssh2_hmac_sha256_init(ctx, data, len) \
+    libssh2_hmac_init(ctx, libssh2_digest_SHA256, data, len)
+#define libssh2_hmac_sha512_init(ctx, data, len) \
+    libssh2_hmac_init(ctx, libssh2_digest_SHA512, data, len)
+#define libssh2_hmac_ripemd160_init(ctx, data, len) \
+    libssh2_hmac_init(ctx, libssh2_digest_RIPEMD160, data, len)
 
 #endif /* LIBSSH2_BACKEND_H */

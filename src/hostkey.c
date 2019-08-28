@@ -209,7 +209,7 @@ hostkey_method_ssh_rsa_signv(LIBSSH2_SESSION * session,
     int ret;
     int i;
     unsigned char hash[SHA_DIGEST_LENGTH];
-    libssh2_sha1_ctx ctx;
+    libssh2_digest_ctx ctx;
 
     if(libssh2_sha1_init(&ctx) != 0)
         return -1;
@@ -430,7 +430,7 @@ hostkey_method_ssh_dss_signv(LIBSSH2_SESSION * session,
 {
     libssh2_dsa_ctx *dsactx = (libssh2_dsa_ctx *) (*abstract);
     unsigned char hash[SHA_DIGEST_LENGTH];
-    libssh2_sha1_ctx ctx;
+    libssh2_digest_ctx ctx;
     int i;
 
     *signature = LIBSSH2_CALLOC(session, 2 * SHA_DIGEST_LENGTH);
@@ -442,6 +442,7 @@ hostkey_method_ssh_dss_signv(LIBSSH2_SESSION * session,
 
     if(libssh2_sha1_init(&ctx) != 0)
         return -1;
+
     for(i = 0; i < veccount; i++) {
         libssh2_sha1_update(ctx, datavec[i].iov_base, datavec[i].iov_len);
     }
@@ -684,14 +685,14 @@ hostkey_method_ssh_ecdsa_sig_verify(LIBSSH2_SESSION * session,
 #define LIBSSH2_HOSTKEY_METHOD_EC_SIGNV_HASH(digest_type)               \
     {                                                                   \
         unsigned char hash[SHA##digest_type##_DIGEST_LENGTH];           \
-        libssh2_sha##digest_type##_ctx ctx;                             \
+        libssh2_digest_ctx ctx;                                         \
         int i;                                                          \
-        libssh2_sha##digest_type##_init(&ctx);                          \
+        libssh2_digest_init(&ctx, libssh2_digest_SHA##digest_type);     \
         for(i = 0; i < veccount; i++) {                                 \
-            libssh2_sha##digest_type##_update(ctx, datavec[i].iov_base, \
-                                              datavec[i].iov_len);      \
+            libssh2_digest_update(ctx, datavec[i].iov_base,             \
+                                  datavec[i].iov_len);                  \
         }                                                               \
-        libssh2_sha##digest_type##_final(ctx, hash);                    \
+        libssh2_digest_final(ctx, hash);                                \
         ret = _libssh2_ecdsa_sign(session, ec_ctx, hash,                \
                                   SHA##digest_type##_DIGEST_LENGTH,     \
                                   signature, signature_len);            \

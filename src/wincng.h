@@ -102,11 +102,7 @@ typedef struct __libssh2_wincng_hash_ctx {
     unsigned long cbHash;
 } _libssh2_wincng_hash_ctx;
 
-#define libssh2_sha1_ctx _libssh2_wincng_hash_ctx
-#define libssh2_sha256_ctx _libssh2_wincng_hash_ctx
-#define libssh2_sha384_ctx _libssh2_wincng_hash_ctx
-#define libssh2_sha512_ctx _libssh2_wincng_hash_ctx
-#define libssh2_md5_ctx _libssh2_wincng_hash_ctx
+#define libssh2_digest_ctx _libssh2_wincng_hash_ctx
 #define libssh2_hmac_ctx _libssh2_wincng_hash_ctx
 
 /*******************************************************************/

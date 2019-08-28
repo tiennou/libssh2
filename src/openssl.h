@@ -142,11 +142,7 @@
 
 #define libssh2_crypto_errcode unsigned long
 
-#define libssh2_sha1_ctx OPAQUE_DEF(EVP_MD_CTX)
-#define libssh2_sha256_ctx OPAQUE_DEF(EVP_MD_CTX)
-#define libssh2_sha384_ctx OPAQUE_DEF(EVP_MD_CTX)
-#define libssh2_sha512_ctx OPAQUE_DEF(EVP_MD_CTX)
-#define libssh2_md5_ctx OPAQUE_DEF(EVP_MD_CTX)
+#define libssh2_digest_ctx OPAQUE_DEF(EVP_MD_CTX)
 #define libssh2_hmac_ctx OPAQUE_DEF(HMAC_CTX)
 
 #define libssh2_rsa_ctx RSA

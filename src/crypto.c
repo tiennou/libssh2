@@ -37,26 +37,40 @@
 #include "libssh2_priv.h"
 #include <stdarg.h>
 
-#define HASH_FUNCTION(hash) \
-int _libssh2_##hash (const void *message, size_t len, void *out) \
-{ \
-    libssh2_##hash##_ctx ctx; \
-    int err = libssh2_##hash##_init(&ctx); \
-    if(err != 0) { \
-        return -1; \
-    } \
- \
-    libssh2_##hash##_update(ctx, message, len); \
-    libssh2_##hash##_final(ctx, out); \
- \
-    return 0; \
+int libssh2_hash(libssh2_digest_algorithm algo,
+                 const void *message, unsigned long len,
+                 void *out)
+{
+    libssh2_digest_ctx ctx;
+    int err = libssh2_digest_init(&ctx, algo);
+    if(err != 0) {
+        return err;
+    }
+
+    libssh2_digest_update(ctx, message, len);
+    libssh2_digest_final(ctx, out);
+
+    return 0;
 }
 
-HASH_FUNCTION(sha1);
-HASH_FUNCTION(sha256);
-HASH_FUNCTION(sha384);
-HASH_FUNCTION(sha512);
-HASH_FUNCTION(md5);
+int libssh2_digest_size(libssh2_digest_algorithm algo)
+{
+    switch(algo) {
+#ifdef LIBSSH2_MD5
+        case libssh2_digest_MD5: return MD5_DIGEST_LENGTH;
+#endif
+        case libssh2_digest_SHA1: return SHA_DIGEST_LENGTH;
+        case libssh2_digest_SHA256: return SHA256_DIGEST_LENGTH;
+        case libssh2_digest_SHA384: return SHA384_DIGEST_LENGTH;
+#ifdef LIBSSH2_HMAC_SHA512
+        case libssh2_digest_SHA512: return SHA512_DIGEST_LENGTH;
+#endif
+#ifdef LIBSSH2_HMAC_RIPEMD
+        case libssh2_digest_RIPEMD160: return RIPEMD160_DIGEST_LENGTH;
+#endif
+        default: return -1;
+    }
+}
 
 /* _libssh2_ecdsa_curve_type_from_name
  *

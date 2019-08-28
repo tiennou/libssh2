@@ -188,108 +188,99 @@ _libssh2_cipher_dtor(_libssh2_cipher_ctx *ctx)
     mbedtls_cipher_free(ctx);
 }
 
+static inline mbedtls_md_type_t
+libssh2_algo_to_md_type(libssh2_digest_algorithm algo)
+{
+    switch(algo) {
+        case libssh2_digest_MD5: return MBEDTLS_MD_MD5;
+        case libssh2_digest_SHA1: return MBEDTLS_MD_SHA1;
+        case libssh2_digest_SHA256: return MBEDTLS_MD_SHA256;
+        case libssh2_digest_SHA384: return MBEDTLS_MD_SHA384;
+        case libssh2_digest_SHA512: return MBEDTLS_MD_SHA512;
+        case libssh2_digest_RIPEMD160: return MBEDTLS_MD_RIPEMD160;
+    }
+}
 
-int
-_libssh2_hash_init(mbedtls_md_context_t *ctx,
-                          mbedtls_md_type_t mdtype,
-                          const unsigned char *key, unsigned long keylen)
+static int
+digest_init(libssh2_digest_ctx *out_ctx,
+            mbedtls_md_type_t mdtype,
+            const unsigned char *key, unsigned long keylen)
 {
     const mbedtls_md_info_t *md_info;
+    mbedtls_md_context_t ctx;
     int ret, hmac;
 
     md_info = mbedtls_md_info_from_type(mdtype);
     if(!md_info)
-        return 0;
+        return -1;
 
     hmac = key == NULL ? 0 : 1;
 
-    mbedtls_md_init(ctx);
-    ret = mbedtls_md_setup(ctx, md_info, hmac);
+    mbedtls_md_init(&ctx);
+    ret = mbedtls_md_setup(&ctx, md_info, hmac);
     if(!ret) {
         if(hmac)
-            ret = mbedtls_md_hmac_starts(ctx, key, keylen);
+            ret = mbedtls_md_hmac_starts(&ctx, key, keylen);
         else
-            ret = mbedtls_md_starts(ctx);
+            ret = mbedtls_md_starts(&ctx);
     }
 
-    return ret == 0 ? 1 : 0;
+    if(ret == 0)
+        *out_ctx = ctx;
+
+    return ret;
 }
 
-int
-_libssh2_hash_final(mbedtls_md_context_t *ctx, unsigned char *hash)
+int libssh2_digest_init(libssh2_digest_ctx *out_ctx,
+                        libssh2_digest_algorithm algo)
 {
-    int ret;
+    int ret = digest_init(out_ctx, libssh2_algo_to_md_type(algo), NULL, 0);
+    if(ret != 0) {
+        return -1;
+    }
 
-    ret = mbedtls_md_finish(ctx, hash);
-    mbedtls_md_free(ctx);
-
-    return ret == 0 ? 0 : -1;
+    return 0;
 }
 
-int
-_libssh2_mbedtls_hash(const unsigned char *data, unsigned long datalen,
-                      mbedtls_md_type_t mdtype, unsigned char *hash)
+int libssh2_digest_update(libssh2_digest_ctx ctx,
+                          const void *data, size_t datalen)
 {
-    const mbedtls_md_info_t *md_info;
-    int ret;
-
-    md_info = mbedtls_md_info_from_type(mdtype);
-    if(!md_info)
-        return 0;
-
-    ret = mbedtls_md(md_info, data, datalen, hash);
-
-    return ret == 0 ? 0 : -1;
+    return mbedtls_md_update(&ctx, (unsigned char *) data, datalen);
 }
 
-#define MBEDTLS_DIGEST(code, digest) \
-int libssh2_##code##_init(libssh2_##code##_ctx *ctx) \
-{ \
-    return _libssh2_hash_init(ctx, digest, NULL, 0); \
-} \
-int libssh2_##code##_update(libssh2_sha1_ctx ctx, \
-    const void *data, size_t len) \
-{ \
-    return mbedtls_md_update(&ctx, (unsigned char *) data, len); \
-} \
-int libssh2_##code##_final(libssh2_sha1_ctx ctx, void *out) \
-{ \
-    return _libssh2_hash_final(&ctx, out); \
+int libssh2_digest_final(libssh2_digest_ctx ctx, void *output)
+{
+    int ret = mbedtls_md_finish(&ctx, output);
+    mbedtls_md_free(&ctx);
+
+    return ret;
 }
 
-MBEDTLS_DIGEST(md5, MBEDTLS_MD_MD5);
-MBEDTLS_DIGEST(sha1, MBEDTLS_MD_SHA1);
-MBEDTLS_DIGEST(sha256, MBEDTLS_MD_SHA256);
-MBEDTLS_DIGEST(sha384, MBEDTLS_MD_SHA384);
-MBEDTLS_DIGEST(sha512, MBEDTLS_MD_SHA512);
+int libssh2_hmac_init(libssh2_hmac_ctx *out_ctx,
+                      libssh2_digest_algorithm algo,
+                      const void *key, size_t keylen)
+{
+    int ret = digest_init(out_ctx, libssh2_algo_to_md_type(algo), key, keylen);
+    if(ret != 0) {
+        return -1;
+    }
 
-#define MBEDTLS_HMAC_DIGEST(code, digest) \
-int libssh2_hmac_##code##_init(libssh2_hmac_ctx *ctx, \
-    const void *key, size_t keylen) \
-{ \
-    return _libssh2_hash_init(ctx, digest, key, keylen); \
+    return 0;
 }
-
-MBEDTLS_HMAC_DIGEST(md5, MBEDTLS_MD_MD5);
-MBEDTLS_HMAC_DIGEST(sha1, MBEDTLS_MD_SHA1);
-MBEDTLS_HMAC_DIGEST(ripemd160, MBEDTLS_MD_RIPEMD160);
-MBEDTLS_HMAC_DIGEST(sha256, MBEDTLS_MD_SHA256);
-MBEDTLS_HMAC_DIGEST(sha384, MBEDTLS_MD_SHA384);
-MBEDTLS_HMAC_DIGEST(sha512, MBEDTLS_MD_SHA512);
 
 int libssh2_hmac_update(libssh2_hmac_ctx ctx, const void *data, size_t datalen)
 {
     return mbedtls_md_hmac_update(&ctx, (unsigned char *) data, datalen);
 }
 
-int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *hash)
+int libssh2_hmac_final(libssh2_hmac_ctx ctx, void *output)
 {
-    return mbedtls_md_hmac_finish(&ctx, hash);
+    return mbedtls_md_hmac_finish(&ctx, output);
 }
 
-int libssh2_hmac_cleanup(libssh2_hmac_ctx *ctx)
+int libssh2_hmac_cleanup(libssh2_hmac_ctx ctx)
 {
-    mbedtls_md_free(ctx);
+    mbedtls_md_free(&ctx);
     return 0;
 }
 
@@ -570,7 +561,7 @@ _libssh2_rsa_sha1_verify(libssh2_rsa_ctx *rsa,
     unsigned char hash[SHA_DIGEST_LENGTH];
     int ret;
 
-    ret = _libssh2_mbedtls_hash(m, m_len, MBEDTLS_MD_SHA1, hash);
+    ret = libssh2_sha1(m, m_len, hash);
     if(ret)
         return -1; /* failure */
 

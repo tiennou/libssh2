@@ -75,11 +75,7 @@
  */
 
 #define libssh2_hmac_ctx     mbedtls_md_context_t
-#define libssh2_sha1_ctx     mbedtls_md_context_t
-#define libssh2_sha256_ctx   mbedtls_md_context_t
-#define libssh2_sha384_ctx   mbedtls_md_context_t
-#define libssh2_sha512_ctx   mbedtls_md_context_t
-#define libssh2_md5_ctx      mbedtls_md_context_t
+#define libssh2_digest_ctx     mbedtls_md_context_t
 
 /*******************************************************************/
 /*
