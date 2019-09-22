@@ -57,7 +57,7 @@ typedef struct ssh2_databuf ssh2_databuf;
 #define SSH2_BUF_INIT { NULL, 0, 0, NULL, 0 }
 #define SSH2_BUF_INIT_SESSION(s) { NULL, 0, 0, (s),  0 }
 #define SSH2_BUF_CONST(data, size) { (data), (size), 0, NULL, 0 }
-#define SSH2_BUF_CSTR(str) { (str), strlen(str), 0, NULL, 0 }
+#define SSH2_BUF_CSTR(str) { (unsigned char *)(str), strlen(str), 0, NULL, 0 }
 
 #define SSH2_BUF_SECINIT \
     { NULL, 0, 0, NULL, SSH2_BUF_FLAG_ZERO_ON_CLEAR }
