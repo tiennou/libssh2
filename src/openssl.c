@@ -42,12 +42,30 @@
 
 #ifdef LIBSSH2_OPENSSL /* compile only if we build with openssl */
 
+#include <openssl/err.h>
 #include <string.h>
 #include "misc.h"
 
 #ifndef EVP_MAX_BLOCK_LENGTH
 #define EVP_MAX_BLOCK_LENGTH 32
 #endif
+
+static void crypto_trace(const char *fmt, ...)
+{
+    va_list args;
+    int error = ERR_get_error();
+    char *error_msg = ERR_error_string(error, NULL);
+    char msg[1024];
+
+    if(error == 0)
+        return;
+
+    va_start(args, fmt);
+    vsnprintf((char *)&msg, sizeof(msg), fmt, args);
+    va_end(args);
+
+    printf("%s: %s (%0xd)", msg, error_msg, error);
+}
 
 int
 read_openssh_private_key_from_memory(void **key_ctx, LIBSSH2_SESSION *session,
@@ -392,6 +410,8 @@ _libssh2_ecdsa_verify(libssh2_ecdsa_ctx * ctx,
     BN_clear_free(ecdsa_sig_.s);
     BN_clear_free(ecdsa_sig_.r);
 #endif
+
+    crypto_trace("_libssh2_ecdsa_verify");
 
     return (ret == 1) ? 0 : -1;
 }
