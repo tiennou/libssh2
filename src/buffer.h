@@ -164,4 +164,11 @@ static inline int ssh2_databuf_advance(ssh2_databuf *buf, size_t bytes)
     return 0;
 }
 
+int ssh2_databuf_put(ssh2_databuf *buf,
+                     const unsigned char *data, size_t size);
+int ssh2_databuf_puts(ssh2_databuf *buf, const char *str);
+
+int ssh2_databuf_put_u8(ssh2_databuf *buf, uint8_t value);
+int ssh2_databuf_put_u32(ssh2_databuf *buf, uint32_t value);
+
 #endif

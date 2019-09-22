@@ -44,3 +44,30 @@ void test_core_databuf__advance(void)
 
     ssh2_databuf_dispose(&buf);
 }
+
+void test_core_databuf__put32(void)
+{
+    ssh2_databuf wr = SSH2_DATABUF_INIT(&g_buf);
+    const uint8_t data[] = {0x00, 0x00, 0x04, 0x00};
+
+    cl_assert_equal_i(0, ssh2_databuf_size(&wr));
+    cl_must_pass(ssh2_databuf_put_u32(&wr, 1024));
+    cl_check(memcmp(&data, ssh2_databuf_ptr(&wr), sizeof(data)) == 0);
+    cl_assert_equal_i(4, ssh2_databuf_size(&wr));
+}
+
+#define NICE_STRING "this-nice-string"
+
+void test_core_databuf__puts(void)
+{
+    ssh2_databuf wr = SSH2_DATABUF_INIT(&g_buf);
+    const uint8_t data[] = {0x00,0x00,0x00,0x10,'t','h','i','s','-',
+        'n','i','c','e','-','s','t','r','i','n','g'};
+
+    ssh2_databuf_put_u32(&wr, strlen(NICE_STRING));
+    cl_assert_equal_i(4, ssh2_databuf_size(&wr));
+
+    ssh2_databuf_puts(&wr, NICE_STRING);
+    cl_check(memcmp(&data, ssh2_buf_ptr(&g_buf), sizeof(data)) == 0);
+    cl_assert_equal_i(4 + strlen(NICE_STRING), ssh2_buf_size(&g_buf));
+}
