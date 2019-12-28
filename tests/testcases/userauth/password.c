@@ -1,5 +1,5 @@
 #include "clar_libssh2.h"
-#include "userauth_helpers.h"
+#include "helpers/userauth.h"
 
 static const char *WRONG_USERNAME = "i dont exist";
 static const char *WRONG_PASSWORD = "i'm not the password";

@@ -1,5 +1,5 @@
 #include "clar_libssh2.h"
-#include "userauth_helpers.h"
+#include "helpers/userauth.h"
 
 #define WRONG_PASSWORD "i'm not the password"
 

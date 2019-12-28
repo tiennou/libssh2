@@ -1,5 +1,5 @@
 
-#include "userauth_helpers.h"
+#include "helpers/userauth.h"
 
 void cl_userauth_check_mech(LIBSSH2_SESSION *session,
                             const char *username, const char *mech)

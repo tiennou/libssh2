@@ -1,5 +1,5 @@
 #include "clar_libssh2.h"
-#include "userauth_helpers.h"
+#include "helpers/userauth.h"
 
 static LIBSSH2_SESSION *session;
 
