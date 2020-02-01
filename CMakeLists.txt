@@ -34,6 +34,12 @@
 # OF SUCH DAMAGE.
 
 cmake_minimum_required(VERSION 2.8.11)
+if(CMAKE_VERSION VERSION_GREATER 3.1)
+  cmake_policy(SET CMP0051 NEW)
+endif()
+if(CMAKE_VERSION VERSION_GREATER 3.0)
+  cmake_policy(SET CMP0042 NEW)
+endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -50,6 +56,7 @@ else()
 endif()
 
 option(BUILD_SHARED_LIBS "Build Shared Libraries" OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Parse version
 
@@ -79,11 +86,69 @@ endif()
 
 include(GNUInstallDirs)
 install(
-  FILES docs/AUTHORS COPYING docs/HACKING README RELEASE-NOTES NEWS
+  FILES docs/AUTHORS COPYING README RELEASE-NOTES NEWS
+    docs/HACKING.md docs/INSTALL_AUTOTOOLS.md docs/INSTALL_CMAKE.md
   DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
-include(max_warnings)
 include(FeatureSummary)
+include(AddCFlagIfSupported)
+include(EnableWarnings)
+
+if(MSVC)
+  # Use the highest warning level for visual studio.
+  if(CMAKE_CXX_FLAGS MATCHES "/W[0-4]")
+    string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+  endif()
+  if(CMAKE_C_FLAGS MATCHES "/W[0-4]")
+    string(REGEX REPLACE "/W[0-4]" "/W4" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+  else()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
+  endif()
+
+  # Disable broken warnings
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
+else()
+  set(CMAKE_C_FLAGS "-D_GNU_SOURCE ${CMAKE_C_FLAGS}")
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG -O0")
+endif()
+
+enable_warnings(all)
+enable_warnings(documentation)
+disable_warnings(missing-field-initializers)
+enable_warnings(strict-aliasing)
+enable_warnings(strict-prototypes)
+enable_warnings(declaration-after-statement)
+enable_warnings(shift-count-overflow)
+enable_warnings(unused-const-variable)
+enable_warnings(unused-function)
+enable_warnings(int-conversion)
+
+# MinGW uses gcc, which expects POSIX formatting for printf, but
+# uses the Windows C library, which uses its own format specifiers.
+# Disable format specifier warnings.
+if(MINGW)
+  disable_warnings(format)
+  disable_warnings(format-security)
+else()
+  enable_warnings(format)
+  enable_warnings(format-security)
+endif()
+
+if("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+  disable_warnings(documentation-deprecated-sync)
+endif()
+
+if(NOT CMAKE_CONFIGURATION_TYPES)
+  # Build Debug by default
+  if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
+  endif()
+else()
+  # Using a multi-configuration generator eg MSVC or Xcode
+  # that uses CMAKE_CONFIGURATION_TYPES and not CMAKE_BUILD_TYPE
+endif()
 
 add_subdirectory(src)
 
@@ -96,6 +161,14 @@ option(BUILD_TESTING "Build libssh2 test suite" ON)
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+option(LINT "Check style while building" OFF)
+if(LINT)
+  add_custom_target(lint ALL
+    ./ci/checksrc.sh
+    WORKING_DIRECTORY ${libssh2_SOURCE_DIR})
+  add_dependencies(libssh2 lint)
 endif()
 
 add_subdirectory(docs)
