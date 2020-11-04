@@ -51,12 +51,6 @@ struct list_node {
     struct list_head *head;
 };
 
-struct string_buf {
-    unsigned char *data;
-    unsigned char *dataptr;
-    size_t len;
-};
-
 int _libssh2_error_flags(LIBSSH2_SESSION* session, int errcode,
                          const char *errmsg, int errflags);
 int _libssh2_error(LIBSSH2_SESSION* session, int errcode, const char *errmsg);
@@ -94,22 +88,18 @@ void _libssh2_store_str(unsigned char **buf, const char *str, size_t len);
 void *_libssh2_calloc(LIBSSH2_SESSION *session, size_t size);
 void _libssh2_explicit_zero(void *buf, size_t size);
 
-static inline void string_buf_init(struct string_buf *buf, ssh2_buf *_buf)
-{
-    buf->data = buf->dataptr = _buf->ptr;
-    buf->len = _buf->size;
-}
-
-int _libssh2_get_u32(struct string_buf *buf, uint32_t *out);
-int _libssh2_get_u64(struct string_buf *buf, libssh2_uint64_t *out);
-int _libssh2_match_string(struct string_buf *buf, const char *match);
-int _libssh2_get_string(struct string_buf *buf, unsigned char **outbuf,
+ssh2_databuf *_libssh2_string_buf_new(LIBSSH2_SESSION *session);
+void _libssh2_string_buf_free(LIBSSH2_SESSION *session, ssh2_databuf *buf);
+int _libssh2_get_u32(ssh2_databuf *buf, uint32_t *out);
+int _libssh2_get_u64(ssh2_databuf *buf, libssh2_uint64_t *out);
+int _libssh2_match_string(ssh2_databuf *buf, const char *match);
+int _libssh2_get_string(ssh2_databuf *buf, unsigned char **outbuf,
                         size_t *outlen);
-int _libssh2_copy_string(LIBSSH2_SESSION* session, struct string_buf *buf,
+int _libssh2_copy_string(LIBSSH2_SESSION* session, ssh2_databuf *buf,
                          unsigned char **outbuf, size_t *outlen);
-int _libssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
+int _libssh2_get_bignum_bytes(ssh2_databuf *buf, unsigned char **outbuf,
                               size_t *outlen);
-int _libssh2_check_length(struct string_buf *buf, size_t requested_len);
+int _libssh2_check_length(ssh2_databuf *buf, size_t requested_len);
 
 #if defined(LIBSSH2_WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN__)
 /* provide a private one */

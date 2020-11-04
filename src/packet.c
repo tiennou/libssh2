@@ -88,17 +88,15 @@ packet_queue_listener(LIBSSH2_SESSION * session, unsigned char *data,
     if(listen_state->state == libssh2_NB_state_idle) {
         unsigned long offset = (sizeof("forwarded-tcpip") - 1) + 5;
         size_t temp_len = 0;
-        struct string_buf buf;
-        buf.data = data;
-        buf.dataptr = buf.data;
-        buf.len = datalen;
+        ssh2_buf _buf = SSH2_BUF_CONST(data, datalen);
+        ssh2_databuf buf = SSH2_DATABUF_INIT(&_buf);
 
         if(datalen < offset) {
             return _libssh2_error(session, LIBSSH2_ERROR_OUT_OF_BOUNDARY,
                                   "Unexpected packet size");
         }
 
-        buf.dataptr += offset;
+        ssh2_databuf_advance(&buf, offset);
 
         if(_libssh2_get_u32(&buf, &(listen_state->sender_channel))) {
             return _libssh2_error(session, LIBSSH2_ERROR_BUFFER_TOO_SMALL,
@@ -299,10 +297,8 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
 
         unsigned long offset = (sizeof("x11") - 1) + 5;
         size_t temp_len = 0;
-        struct string_buf buf;
-        buf.data = data;
-        buf.dataptr = buf.data;
-        buf.len = datalen;
+        ssh2_buf _buf = SSH2_BUF_CONST(data, datalen);
+        ssh2_databuf buf = SSH2_DATABUF_INIT(&_buf);
 
         if(datalen < offset) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
@@ -311,7 +307,7 @@ packet_x11_open(LIBSSH2_SESSION * session, unsigned char *data,
             goto x11_exit;
         }
 
-        buf.dataptr += offset;
+        ssh2_databuf_advance(&buf, offset);
 
         if(_libssh2_get_u32(&buf, &(x11open_state->sender_channel))) {
             _libssh2_error(session, LIBSSH2_ERROR_INVAL,
@@ -484,6 +480,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
     LIBSSH2_CHANNEL *channelp = NULL;
     size_t data_head = 0;
     unsigned char msg = data[0];
+    ssh2_buf _buf = SSH2_BUF_CONST(data, datalen);
+    ssh2_databuf buf = SSH2_DATABUF_INIT(&_buf);
 
     switch(session->packAdd_state) {
     case libssh2_NB_state_idle:
@@ -531,15 +529,13 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
         case SSH_MSG_DISCONNECT:
             if(datalen >= 5) {
                 uint32_t reason = 0;
-                struct string_buf buf;
-                buf.data = (unsigned char *)data;
-                buf.dataptr = buf.data;
-                buf.len = datalen;
-                buf.dataptr++; /* advance past type */
+
+                ssh2_databuf_advance(&buf, 1); /* advance past type */
 
                 _libssh2_get_u32(&buf, &reason);
                 _libssh2_get_string(&buf, &message, &message_len);
                 _libssh2_get_string(&buf, &language, &language_len);
+
 
                 if(session->ssh_msg_disconnect) {
                     LIBSSH2_DISCONNECT(session, reason, (const char *)message,
@@ -587,11 +583,8 @@ _libssh2_packet_add(LIBSSH2_SESSION * session, unsigned char *data,
                 int always_display = data[1];
 
                 if(datalen >= 6) {
-                    struct string_buf buf;
-                    buf.data = (unsigned char *)data;
-                    buf.dataptr = buf.data;
-                    buf.len = datalen;
-                    buf.dataptr += 2; /* advance past type & always display */
+                    /* advance past type & always display */
+                    ssh2_databuf_advance(&buf, 2);
 
                     _libssh2_get_string(&buf, &message, &message_len);
                     _libssh2_get_string(&buf, &language, &language_len);

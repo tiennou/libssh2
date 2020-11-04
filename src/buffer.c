@@ -151,3 +151,12 @@ void ssh2_buf_zero(ssh2_buf *buf)
 {
     _libssh2_explicit_zero(buf->ptr, buf->size);
 }
+
+void ssh2_databuf_dispose(ssh2_databuf *buf)
+{
+    if(buf == NULL)
+        return;
+
+    buf->data = NULL;
+    buf->buf = NULL;
+}
